@@ -286,21 +286,19 @@ select:disabled { opacity: .55; }
 .next-step .actions { flex: 1 1 260px; }
 .head-actions { order: 2; }
 
-/* aranabilir kırılım listesi */
-.native-hidden { position: absolute !important; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* aranabilir kırılım listesi: tek alan, içine yazılabilir */
 .combo { position: relative; }
-.combo-btn { width: 100%; text-align: left; background: #fff; border: 2px solid transparent; border-radius: 14px; padding: 11px 38px 11px 14px; cursor: pointer; font-weight: 600; position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.combo-btn::after { content: ""; position: absolute; right: 16px; top: 50%; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: translateY(-70%) rotate(45deg); }
-.combo-btn.placeholder { color: var(--muted); font-weight: 400; }
-.combo-btn:disabled { opacity: .55; cursor: not-allowed; }
-.combo-btn[aria-expanded="true"] { border-color: var(--accent); }
-.combo-panel { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border-radius: 14px; box-shadow: 0 12px 30px -10px rgba(34, 56, 90, .35); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.combo-search { border: 2px solid var(--accent) !important; background: #fff !important; padding: 9px 12px !important; border-radius: 10px !important; }
-.combo-list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; }
-.combo-list li { padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: .92rem; }
+.combo-input { width: 100%; background: #fff !important; border: 2px solid transparent; border-radius: 14px; padding: 11px 38px 11px 14px !important; font-weight: 600; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%) !important;
+  background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50% !important; background-size: 5px 5px, 5px 5px !important; background-repeat: no-repeat !important; }
+.combo-input::placeholder { color: var(--muted); font-weight: 400; }
+.combo-input:focus { border-color: var(--accent) !important; font-weight: 400; }
+.combo-input:disabled { opacity: .55; cursor: not-allowed; }
+.combo-list { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border-radius: 14px; box-shadow: 0 12px 30px -10px rgba(34, 56, 90, .35); list-style: none; margin: 0; padding: 6px; max-height: 280px; overflow-y: auto; }
+.combo-list li { padding: 10px; border-radius: 8px; cursor: pointer; font-size: .92rem; }
 .combo-list li.active { background: var(--soft); }
 .combo-list li[aria-selected="true"] { font-weight: 800; color: var(--accent-ink); }
-.combo-empty { color: var(--muted); font-size: .88rem; padding: 6px 10px; }
+.combo-list li.combo-empty { color: var(--muted); cursor: default; }
 .mail-fallback { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--ink); color: #fff; padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 10px; font-size: .92rem; box-shadow: 0 -8px 24px -10px rgba(0, 0, 0, .4); }
 .mail-fallback div { display: flex; gap: 10px; flex-wrap: wrap; }
 .mail-fallback a { background: #fff; color: var(--ink); font-weight: 800; padding: 9px 14px; border-radius: 999px; text-decoration: none; }

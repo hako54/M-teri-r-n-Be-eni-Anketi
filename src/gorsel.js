@@ -145,4 +145,21 @@ function renderReportPng(results) {
   return resvg.render().asPng();
 }
 
-module.exports = { buildReportSvg, renderReportPng };
+// Ana ekran simgesi: iki kumaş parçası (giriş ekranındaki gibi), mavi zemin.
+const icons = {};
+function appIcon(size) {
+  if (!icons[size]) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
+      <defs><pattern id="s" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#F2F6FB"/><rect width="4" height="12" fill="#9DB7DE"/></pattern>
+      <pattern id="d" width="18" height="18" patternUnits="userSpaceOnUse"><rect width="18" height="18" fill="#FBF7F1"/><circle cx="5" cy="5" r="2.6" fill="#F4C9C2"/><circle cx="14" cy="13" r="2.6" fill="#BCD3F2"/></pattern></defs>
+      <rect width="180" height="180" fill="${C.accent}"/>
+      <rect x="34" y="38" width="54" height="78" rx="12" fill="url(#s)"/>
+      <rect x="94" y="54" width="54" height="78" rx="12" fill="url(#d)"/>
+      <rect x="40" y="134" width="100" height="10" rx="5" fill="#FFFFFF" opacity=".9"/>
+    </svg>`;
+    icons[size] = new Resvg(svg, { fitTo: { mode: 'width', value: size }, font: { loadSystemFonts: false } }).render().asPng();
+  }
+  return icons[size];
+}
+
+module.exports = { buildReportSvg, renderReportPng, appIcon };

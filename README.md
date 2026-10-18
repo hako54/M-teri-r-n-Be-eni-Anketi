@@ -8,7 +8,7 @@ Model görsellerini yükleyip beğeni anketi yapan web uygulaması. Davet ve son
 - **Şifre:** "Şifremi unuttum" isteği adminlere düşer (Outlook ile de yazılabilir); admin Yönetim sayfasından 24 saat geçerli, tek kullanımlık sıfırlama linki oluşturup kullanıcıya Outlook ile gönderir. Kullanıcı Hesabım sayfasından şifresini değiştirebilir.
 - **Günlük yedek:** Her gün 03:00'ten sonra veritabanının kopyası sunucu diskine (14 gün) ve diskten bağımsız depolama alanına (Railway bucket; veritabanı 30 gün, görseller kalıcı) alınır. Yönetim sayfasında yedekler listelenir, indirilir, istenirse elle alınır.
 - **Modeller:** Sınırsız model, her modele birden fazla görsel. Her yeni model otomatik numara alır (`MDL-0001`, `MDL-0002`…). Ana kumaş ve içerik elle yazılır. Model kaydedilince "Ankete ilerle" ile model seçili olarak anket oluşturmaya geçilir; formda "Kaydet ve ankete ilerle" düğmesi de vardır.
-- **Ürün kırılımı:** Marka Müdürlükleri → Gelecek Dönem Buyer Grup → Gelecek Dönem Merch Alt Grup Kod → Gelecek Dönem Ürün Klasman. Alt kırılımlı seçilir: üst seviye seçilince yalnızca ona ait alt seçenekler gelir. Her liste açılınca arama kutusu çıkar; yazdıkça süzülür (Türkçe karakter fark etmez: "sapka" → "ŞAPKA"), klavyeyle de seçilebilir. Galeri marka müdürlüğüne göre süzülebilir, Excel çıktısında her seviye ayrı sütundur.
+- **Ürün kırılımı:** Marka Müdürlükleri → Gelecek Dönem Buyer Grup → Gelecek Dönem Merch Alt Grup Kod → Gelecek Dönem Ürün Klasman. Alt kırılımlı seçilir: üst seviye seçilince yalnızca ona ait alt seçenekler gelir. Her seviye tek bir alandır: dokununca seçenekler açılır, içine yazınca süzülür (Türkçe karakter fark etmez: "sapka" → "ŞAPKA"). Galeri marka müdürlüğüne göre süzülebilir, Excel çıktısında her seviye ayrı sütundur.
 - **A/B testi:** Bir modelin görselleri aynı ürünün alternatifleriyse (model rengi, jakar deseni, çizgi renkleri ve yerleşimi, kumaş dokusu, ekose renkleri, baskı) model "A/B testi" olarak işaretlenir. Her görsel bir seçenek olur (A, B, C…) ve isteğe bağlı bir ad alır. Katılımcı her seçeneği ayrı puanlar, sonra "Koleksiyona hangisi girsin?" sorusunda birini ya da "Hiçbiri"ni seçer. En çok tercih edilen seçenek (eşitlikte yüksek ortalama) kazanır.
 - **Anket gönderme (Outlook):** "Oluştur ve Outlook'ta gönder" anketi canlıya alır ve cihazdaki Outlook'u; alıcılar gizli (BCC), konu ve anket linki hazır bir mail ile açar. Gönderen kişinin kendi şirket hesabı kullanılır. Herkes aynı linki alır; katılımcı linki açınca kullanıcı adını yazar (şirket dışı kişiler tam adresini) ve her kişi anketi bir kez doldurabilir. Alıcı listesine kullanıcı adları ya da Outlook'tan kopyalanan "Ad Soyad <adres>" listesi yazılabilir.
 - **Taslak:** "Taslak olarak kaydet" ile kaydedilen anket sonra "Gönder" ile canlıya alınır. Gönderilmeyen taslaklar 7 gün sonra otomatik silinir.
@@ -21,6 +21,10 @@ Model görsellerini yükleyip beğeni anketi yapan web uygulaması. Davet ve son
   - *Telefon:* "Paylaş → Outlook" görseli ve Excel dosyalarını paylaşım menüsüyle Outlook'a ek olarak verir (alıcı elle yazılır).
   - *Diğer yol:* raporu panoya kopyalayıp Outlook'u açan düğme.
   Sonucu henüz gönderilmemiş anketler listede "Sonucu gönder" ile işaretlenir.
+
+## Güncellemeler
+
+Stil ve betik dosyaları, kod içeriğinden üretilen sürüm numarasıyla çağrılır (`src/surum.js`); sayfalar önbellekte tutulmaz. Açık sayfa ya da telefonun ana ekranına eklenen kısayol öne geldiğinde `/surum` ile yeni sürüm olup olmadığına bakar ve varsa kendini yeniler. Kişi bir formu dolduruyorsa yazdıkları kaybolmasın diye yalnızca "Şimdi yenile" notu gösterilir.
 
 ## Kırılım listesini güncelleme / yeni başlık ekleme
 

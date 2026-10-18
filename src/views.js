@@ -4,6 +4,7 @@ const { formatTR } = require('./time');
 const { formatAvg } = require('./results');
 const kirilim = require('./kirilim');
 const config = require('./config');
+const { version, asset } = require('./surum');
 const { DRAFT_DAYS, draftExpiresAt } = require('./surveys');
 
 const draftNote = (survey) => `Taslaklar ${DRAFT_DAYS} gün içinde gönderilmezse otomatik silinir. Bu taslak ${formatTR(draftExpiresAt(survey))} tarihinde silinecek.`;
@@ -15,8 +16,13 @@ function layout({ title, user, body, nav = true, active = '' }) {
 <title>${html`${title}`} · Model Beğeni Anketi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="/static/style.css">
-<script src="/static/outlook.js" defer></script>
+<link rel="stylesheet" href="${asset('/static/style.css')}">
+<script src="${asset('/static/outlook.js')}" defer></script>
+<script src="${asset('/static/guncelle.js')}" defer></script>
+<meta name="app-version" content="${version}">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/ikon-180.png">
+<meta name="theme-color" content="#EAF4FF">
 </head><body>
 ${nav && user ? html`<header class="bar"><div class="bar-in">
   <a class="brand" href="/modeller">Model Beğeni Anketi</a>
@@ -203,12 +209,12 @@ function kirilimFields(value) {
     const opts = i <= path.length ? kirilim.options(path.slice(0, i)) : [];
     return html`<label class="field"><span>${label}</span>
       <select id="k${i}" name="k${i}" data-level="${i}" ${i > path.length ? 'disabled' : ''}>
-        <option value="">${i > path.length ? `Önce ${kirilim.levels[i - 1].toLocaleLowerCase('tr')} seçin` : 'Seçin'}</option>
+        <option value="">${i > path.length ? 'Önce üstteki alanı seçin' : 'Seçin'}</option>
         ${opts.map((o) => html`<option ${path[i] === o ? 'selected' : ''}>${o}</option>`)}
       </select></label>`;
   })}
   </fieldset>
-  <script src="/static/kirilim.js"></script>`;
+  <script src="${asset('/static/kirilim.js')}"></script>`;
 }
 
 function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, added, saved }) {
@@ -256,7 +262,7 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, 
       </div>
     </div>
     </form>
-    <script src="/static/onizleme.js"></script>`,
+    <script src="${asset('/static/onizleme.js')}"></script>`,
   });
 }
 
@@ -329,7 +335,7 @@ function newSurveyPage({ user, models, values = {}, errs }) {
       </div>
       <p class="sub small">Taslaklar ${DRAFT_DAYS} gün içinde gönderilmezse otomatik silinir.</p>
     </form>
-    <script src="/static/anket-olustur.js"></script>`,
+    <script src="${asset('/static/anket-olustur.js')}"></script>`,
   });
 }
 
@@ -456,7 +462,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     </tbody></table></div>` : html`
     <h2>Ankette ${models.length} model var</h2>
     <div class="pick">${models.map((m) => html`<div class="pick-item">${thumb(m.image)}<span class="no">${m.code}</span>${m.ab ? html`<span class="ab">A/B</span>` : ''}<small>${m.ana_kumas}</small></div>`)}</div>`}
-    <script src="/static/kopyala.js"></script>
+    <script src="${asset('/static/kopyala.js')}"></script>
     ${autoOpenOutlook && invite ? raw(`<script>setTimeout(function(){var a=document.getElementById('outlook');if(!a)return;if(window.openMail)window.openMail(a.getAttribute('href'));else window.location.href=a.href;},400);</script>`) : ''}`,
   });
 }
@@ -511,7 +517,7 @@ function participantPage({ survey, models, email, test = false }) {
         </div>
       </section>`)}
     </form>
-    <script src="/static/anket.js"></script>`,
+    <script src="${asset('/static/anket.js')}"></script>`,
   });
 }
 

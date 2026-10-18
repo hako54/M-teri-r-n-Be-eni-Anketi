@@ -9,7 +9,8 @@ const auth = require('./auth');
 const views = require('./views');
 const { closesAt, formatTR } = require('./time');
 const { computeResults, resultsCsv, commentsCsv, firstImage } = require('./results');
-const { renderReportPng } = require('./gorsel');
+const { renderReportPng, appIcon } = require('./gorsel');
+const surum = require('./surum');
 const { resultDraft } = require('./eml');
 const { resultEmail } = require('./rapor');
 const surveys = require('./surveys');
@@ -23,7 +24,8 @@ const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
-app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
+// Stil ve betikler sürüm numarasıyla çağrıldığı için uzun süre önbellekte kalabilir; yeni sürümde adres değişir.
+app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: '365d', immutable: true }));
 app.use('/uploads', express.static(config.uploadDir, { maxAge: '30d', immutable: true }));
 app.use(auth.loadUser);
 
@@ -37,7 +39,25 @@ const upload = multer({
   fileFilter: (req, file, cb) => cb(null, Boolean(EXT[file.mimetype])),
 });
 
-const send = (res, page, status = 200) => res.status(status).type('html').send(String(page));
+// Sayfalar önbellekte tutulmaz: ana ekran kısayolu ve geri tuşu da her zaman güncel sürümü alır.
+const send = (res, page, status = 200) => res.status(status).type('html').set('Cache-Control', 'no-cache').send(String(page));
+
+app.get('/surum', (req, res) => res.set('Cache-Control', 'no-store').json({ v: surum.version }));
+
+// Telefonda "Ana Ekrana Ekle" için ad ve simge.
+app.get('/manifest.webmanifest', (req, res) => res.type('application/manifest+json').set('Cache-Control', 'no-cache').json({
+  name: 'Model Beğeni Anketi',
+  short_name: 'Beğeni Anketi',
+  start_url: '/',
+  display: 'browser',
+  background_color: '#EAF4FF',
+  theme_color: '#EAF4FF',
+  icons: [{ src: '/ikon-180.png', sizes: '180x180', type: 'image/png' }, { src: '/ikon-512.png', sizes: '512x512', type: 'image/png' }],
+}));
+app.get(['/ikon-180.png', '/ikon-512.png', '/apple-touch-icon.png'], (req, res) => {
+  const size = req.path.includes('512') ? 512 : 180;
+  res.type('png').set('Cache-Control', 'public, max-age=86400').send(appIcon(size));
+});
 const field = (v, max) => String(v ?? '').trim().slice(0, max);
 
 // ---------- Hesap ----------

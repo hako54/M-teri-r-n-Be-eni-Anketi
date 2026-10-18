@@ -405,3 +405,21 @@ test('yedek: günlük kopya 03:00 sonrası bir kez alınır, admin indirebilir',
   r = await admin('POST', '/yonetim/yedekle');
   assert.strictEqual(r.location, '/yonetim?m=yedek');
 });
+
+test('güncelleme: sürüm numaralı dosyalar, önbelleksiz sayfalar, ana ekran simgesi', async () => {
+  const { version } = require('../src/surum');
+  let res = await fetch(`${base}/giris`);
+  assert.strictEqual(res.headers.get('cache-control'), 'no-cache');
+  const page = await res.text();
+  assert.ok(page.includes(`/static/style.css?v=${version}`));
+  assert.ok(page.includes(`<meta name="app-version" content="${version}">`));
+  assert.ok(page.includes('rel="manifest"'));
+  res = await fetch(`${base}/static/style.css?v=${version}`);
+  assert.match(res.headers.get('cache-control'), /immutable/);
+  res = await fetch(`${base}/surum`);
+  assert.deepStrictEqual(await res.json(), { v: version });
+  res = await fetch(`${base}/ikon-180.png`);
+  assert.strictEqual(res.headers.get('content-type'), 'image/png');
+  res = await fetch(`${base}/manifest.webmanifest`);
+  assert.strictEqual((await res.json()).short_name, 'Beğeni Anketi');
+});

@@ -1,5 +1,5 @@
 // Alt kırılımlı, aranabilir seçim. Her seviye için gerçek <select> formda kalır (gönderilen değer odur);
-// üstüne açılınca arama kutusu çıkan bir liste çizilir. Bir seviye değişince alttakiler sıfırlanır ve
+// yerine içine yazılabilen tek bir alan çizilir. Bir seviye değişince alttakiler sıfırlanır ve
 // yeni seçenekler sunucudan gelir.
 (function () {
   var box = document.getElementById('kirilim');
@@ -13,53 +13,48 @@
       .normalize('NFD').replace(/[̀-ͯ]/g, '');
   }
 
+  // Tek alan: liste görünümünde, içine yazılabilen kutu. Dokununca seçenekler açılır, yazdıkça daralır.
   function combo(select) {
-    select.classList.add('native-hidden');
+    // Gerçek liste formda kalır ama hiç görünmez (stil dosyası gecikse de iki alan çıkmasın diye satır içi).
+    select.style.display = 'none';
     select.tabIndex = -1;
-    select.setAttribute('aria-hidden', 'true');
     var wrap = document.createElement('div');
     wrap.className = 'combo';
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'combo-btn';
-    button.setAttribute('aria-haspopup', 'listbox');
-    button.setAttribute('aria-expanded', 'false');
-    var panel = document.createElement('div');
-    panel.className = 'combo-panel';
-    panel.hidden = true;
-    var search = document.createElement('input');
-    search.type = 'search';
-    search.className = 'combo-search';
-    search.placeholder = 'Ara…';
-    search.setAttribute('aria-label', 'Listede ara');
-    search.autocomplete = 'off';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'combo-input';
+    input.autocomplete = 'off';
+    input.setAttribute('autocapitalize', 'characters');
+    input.spellcheck = false;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-expanded', 'false');
+    if (select.id) { input.id = select.id + '-ara'; var lbl = select.closest('label'); if (lbl) lbl.htmlFor = input.id; }
     var list = document.createElement('ul');
     list.className = 'combo-list';
     list.setAttribute('role', 'listbox');
-    var empty = document.createElement('div');
-    empty.className = 'combo-empty';
-    empty.textContent = 'Eşleşen seçenek yok';
-    panel.append(search, list, empty);
-    wrap.append(button, panel);
+    list.hidden = true;
+    wrap.append(input, list);
     select.parentNode.insertBefore(wrap, select.nextSibling);
-    var label = select.closest('label');
-    if (label) label.addEventListener('click', function (e) { if (e.target === label.firstElementChild) e.preventDefault(); });
 
     var active = -1;
+    var typing = false;
 
     function options() {
       return Array.prototype.filter.call(select.options, function (o) { return o.value; });
     }
+    function selectedText() {
+      var o = select.selectedOptions[0];
+      return o && o.value ? o.textContent : '';
+    }
 
     function sync() {
-      var chosen = select.selectedOptions[0];
-      button.textContent = chosen && chosen.value ? chosen.textContent : select.options[0] ? select.options[0].textContent : '';
-      button.classList.toggle('placeholder', !(chosen && chosen.value));
-      button.disabled = select.disabled;
+      input.value = selectedText();
+      input.placeholder = select.options[0] ? select.options[0].textContent : '';
+      input.disabled = select.disabled;
     }
 
     function render() {
-      var q = fold(search.value.trim());
+      var q = typing ? fold(input.value.trim()) : '';
       list.innerHTML = '';
       var shown = 0;
       options().forEach(function (o) {
@@ -72,12 +67,17 @@
         list.appendChild(li);
         shown++;
       });
-      empty.hidden = shown > 0;
+      if (!shown) {
+        var none = document.createElement('li');
+        none.className = 'combo-empty';
+        none.textContent = 'Eşleşen seçenek yok';
+        list.appendChild(none);
+      }
       setActive(shown ? 0 : -1);
     }
 
     function setActive(i) {
-      var items = list.children;
+      var items = list.querySelectorAll('li[data-value]');
       if (active >= 0 && items[active]) items[active].classList.remove('active');
       active = i;
       if (active >= 0 && items[active]) {
@@ -87,40 +87,45 @@
     }
 
     function open() {
-      if (select.disabled) return;
+      if (select.disabled || !list.hidden) return;
       closeAll(wrap);
-      panel.hidden = false;
-      button.setAttribute('aria-expanded', 'true');
-      search.value = '';
+      typing = false;
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
       render();
-      search.focus();
+      // Yazmaya başlayınca seçili değerin üzerine yazılsın.
+      input.select();
     }
 
-    function close(focusButton) {
-      panel.hidden = true;
-      button.setAttribute('aria-expanded', 'false');
-      if (focusButton) button.focus();
+    function close() {
+      list.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      typing = false;
+      sync();
     }
 
     function choose(value) {
       select.value = value;
-      sync();
-      close(true);
+      close();
+      input.blur();
       select.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    button.addEventListener('click', function () { if (panel.hidden) open(); else close(); });
-    search.addEventListener('input', render);
-    search.addEventListener('keydown', function (e) {
-      var n = list.children.length;
-      if (e.key === 'ArrowDown') { e.preventDefault(); if (n) setActive((active + 1) % n); }
+    input.addEventListener('focus', open);
+    input.addEventListener('click', open);
+    input.addEventListener('input', function () { typing = true; if (list.hidden) open(); render(); });
+    input.addEventListener('blur', function () { setTimeout(close, 120); });
+    input.addEventListener('keydown', function (e) {
+      var items = list.querySelectorAll('li[data-value]');
+      var n = items.length;
+      if (e.key === 'ArrowDown') { e.preventDefault(); open(); if (n) setActive((active + 1) % n); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); if (n) setActive((active - 1 + n) % n); }
-      else if (e.key === 'Enter') { e.preventDefault(); if (list.children[active]) choose(list.children[active].dataset.value); }
-      else if (e.key === 'Escape') { e.preventDefault(); close(true); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (items[active]) choose(items[active].dataset.value); }
+      else if (e.key === 'Escape') { close(); }
     });
     list.addEventListener('mousedown', function (e) { e.preventDefault(); });
     list.addEventListener('click', function (e) {
-      var li = e.target.closest('li');
+      var li = e.target.closest('li[data-value]');
       if (li) choose(li.dataset.value);
     });
 
@@ -156,7 +161,7 @@
     if (e.target.tagName !== 'SELECT' || !e.target.hasAttribute('data-level')) return;
     var level = Number(e.target.getAttribute('data-level'));
     var prefix = selects.slice(0, level + 1).map(function (s) { return s.value; });
-    selects.slice(level + 1).forEach(function (s) { fill(s, [], 'Önce üst seviyeyi seçin'); });
+    selects.slice(level + 1).forEach(function (s) { fill(s, [], 'Önce üstteki alanı seçin'); });
     var next = selects[level + 1];
     if (!next || !e.target.value) return;
     fill(next, [], 'Yükleniyor…');
