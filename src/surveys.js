@@ -21,12 +21,12 @@ function parseEmails(text) {
 }
 
 // Anket taslak olarak oluşur: yalnızca test linki çalışır, kapanış zamanı canlıya alınınca hesaplanır.
-function createSurvey({ userId, title, modelIds, emails, resultEmails, days, hour }) {
+function createSurvey({ userId, title, modelIds, emails, resultEmails, days, hour, lang = 'tr' }) {
   return tx(() => {
     const { lastInsertRowid: surveyId } = db.prepare(`
-      INSERT INTO surveys (user_id, title, closes_at, result_emails, open_days, open_hour, public_token, test_token, result_token)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(userId, title, closesAt(days, hour), resultEmails.join(','), days, hour, newToken(), newToken(), newToken());
+      INSERT INTO surveys (user_id, title, closes_at, result_emails, open_days, open_hour, public_token, test_token, result_token, lang)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(userId, title, closesAt(days, hour), resultEmails.join(','), days, hour, newToken(), newToken(), newToken(), lang);
     const addModel = db.prepare('INSERT INTO survey_models (survey_id, model_id, sort_order) VALUES (?, ?, ?)');
     modelIds.forEach((id, i) => addModel.run(surveyId, id, i));
     const addInvite = db.prepare('INSERT INTO invitations (survey_id, email, token) VALUES (?, ?, ?)');

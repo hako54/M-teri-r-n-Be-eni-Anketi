@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS models (
   user_id        INTEGER NOT NULL REFERENCES users(id),
   ana_kumas      TEXT NOT NULL,
   icerik         TEXT NOT NULL,
+  ozellik        TEXT,                   -- isteğe bağlı: tuşe ve diğer model özellikleri
   kirilim        TEXT,                   -- JSON dizi: [Marka Müdürlüğü, Buyer Grup, Merch Alt Grup, Klasman, …]
   -- ab_test = 1: görseller aynı modelin alternatifleri (renk, desen, doku…) ve ayrı ayrı değerlendirilir.
   ab_test        INTEGER NOT NULL DEFAULT 0,
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS surveys (
   title          TEXT NOT NULL,
   closes_at      TEXT NOT NULL,          -- UTC ISO
   result_emails  TEXT NOT NULL,          -- virgülle ayrılmış
+  lang           TEXT NOT NULL DEFAULT 'tr',  -- katılımcı dili: 'tr' ya da 'en' (metinler çevrilir)
   open_days      INTEGER,
   open_hour      TEXT,
   published_at   TEXT,                   -- NULL: taslak; yalnızca test linki çalışır
@@ -101,6 +103,14 @@ CREATE TABLE IF NOT EXISTS comments (
   PRIMARY KEY (invitation_id, model_id)
 );
 
+-- Türkçe metinlerin İngilizce karşılıkları; bir metin bir kez çevrilir, elle düzeltilen çeviri korunur.
+CREATE TABLE IF NOT EXISTS translations (
+  source     TEXT PRIMARY KEY,
+  en         TEXT NOT NULL,
+  engine     TEXT NOT NULL,              -- 'deepl' ya da 'elle'
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Admin tarafından oluşturulan tek kullanımlık şifre sıfırlama linkleri.
 CREATE TABLE IF NOT EXISTS password_resets (
   token      TEXT PRIMARY KEY,
@@ -142,6 +152,8 @@ function addColumn(table, column, definition) {
 }
 addColumn('models', 'kirilim', 'TEXT');
 addColumn('users', 'reset_requested_at', 'TEXT');
+addColumn('models', 'ozellik', 'TEXT');
+addColumn('surveys', 'lang', "TEXT NOT NULL DEFAULT 'tr'");
 for (const col of ['result_opened_at TEXT', 'open_days INTEGER', 'open_hour TEXT', 'published_at TEXT', 'public_token TEXT', 'test_token TEXT', 'result_token TEXT']) {
   const [name, type] = col.split(' ');
   addColumn('surveys', name, type);

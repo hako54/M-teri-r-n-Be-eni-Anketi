@@ -7,6 +7,21 @@ const path = require('node:path');
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'anket-test-'));
 process.env.ADMIN_EMAILS = 'Ayse@Firma.com.tr; diger.admin@firma.com.tr';
 process.env.COMPANY_DOMAIN = 'firma.com.tr';
+process.env.DEEPL_API_KEY = 'test-anahtar:fx';
+
+// DeepL taklidi: gerçek servise gidilmez. deeplDown true iken hata döner.
+let deeplDown = false;
+const deeplCalls = [];
+const realFetch = global.fetch;
+global.fetch = async (url, opts) => {
+  if (String(url).startsWith('https://api-free.deepl.com/')) {
+    const body = JSON.parse(opts.body);
+    deeplCalls.push(body);
+    if (deeplDown) return new Response('servis yok', { status: 503 });
+    return Response.json({ translations: body.text.map((t) => ({ text: `EN ${t}` })) });
+  }
+  return realFetch(url, opts);
+};
 process.env.REGISTRATION_CODE = 'KOD-123';
 
 const app = require('../src/server');
@@ -508,4 +523,83 @@ test('model silme: ekleyen ya da admin siler, ankette kullanılan silinmez', asy
   // Numara yeniden kullanılmaz
   const next = await newModel(owner, 'Sonraki');
   assert.ok(next > adminsTarget);
+});
+
+test('İngilizce anket: dil seçimi, otomatik çeviri, düzeltme, İngilizce katılımcı ekranı; tuşe alanı', async () => {
+  const fd = new FormData();
+  fd.append('ana_kumas', 'Kaşe kumaş'); fd.append('icerik', '%80 Yün %20 Polyamid'); fd.append('ozellik', 'yumuşak tuşe');
+  fd.append('images', new Blob([PNG], { type: 'image/png' }), 'k.png');
+  let r = await admin('POST', '/modeller', fd);
+  const modelId = modelIdFrom(r);
+  assert.strictEqual(db.prepare('SELECT ozellik FROM models WHERE id = ?').get(modelId).ozellik, 'yumuşak tuşe');
+  r = await admin('GET', '/modeller?q=tuşe');
+  assert.match(r.text, /Kaşe kumaş/, 'tuşe ile aranabilir');
+
+  r = await admin('GET', '/anketler/yeni');
+  assert.match(r.text, /Anket dili/);
+  assert.ok(r.text.indexOf('Anket dili') < r.text.indexOf('Anket adı'), 'dil seçimi en başta');
+
+  const body = surveyBody({ title: 'Kış koleksiyonu', models: [modelId], emails: 'buyer@ornek.com', action: 'gonder' });
+  body.set('lang', 'en');
+  r = await admin('POST', '/anketler', body);
+  assert.match(r.location, /m=yayinda/, 'çeviri tamamsa doğrudan yayınlanır');
+  const id = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  const survey = db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
+  assert.strictEqual(survey.lang, 'en');
+  const sent = deeplCalls.at(-1);
+  assert.strictEqual(sent.source_lang, 'TR');
+  assert.strictEqual(sent.target_lang, 'EN-US');
+  assert.ok(sent.text.includes('yumuşak tuşe') && sent.text.includes('Kış koleksiyonu'));
+
+  r = await admin('GET', `/anketler/${id}`);
+  assert.match(r.text, /İngilizce metinler/);
+  assert.match(r.text, /value="EN Kış koleksiyonu"/);
+  assert.match(r.text, /mailto:[^"]*subject=Your%20opinion%20matters%3A%20EN%20K%C4%B1%C5%9F%20koleksiyonu/);
+
+  r = await anon('GET', `/k/${survey.public_token}`);
+  assert.match(r.text, /<html lang="en">/);
+  assert.match(r.text, /Start survey/);
+  assert.match(r.text, /EN Kış koleksiyonu/);
+  const token = await join(survey.public_token, 'buyer@ornek.com');
+  r = await anon('GET', `/a/${token}`);
+  assert.match(r.text, /How much do you like this model\?/);
+  assert.match(r.text, /Not my style/);
+  assert.match(r.text, /EN Kaşe kumaş · EN %80 Yün %20 Polyamid/);
+  assert.match(r.text, /EN yumuşak tuşe/);
+  assert.doesNotMatch(r.text, /Tarzım değil/);
+
+  // Elle düzeltme: sonraki gösterimlerde ve anketlerde kullanılır
+  const fix = new URLSearchParams();
+  for (const [src, en] of [['Kış koleksiyonu', 'Winter collection'], ['yumuşak tuşe', 'soft hand feel']]) { fix.append('src', src); fix.append('en', en); }
+  r = await admin('POST', `/anketler/${id}/ceviri`, fix);
+  assert.match(r.location, /m=ceviri/);
+  r = await anon('GET', `/a/${token}`);
+  assert.match(r.text, /Winter collection/);
+  assert.match(r.text, /soft hand feel/);
+  r = await anon('POST', `/a/${token}`, { [`r_${modelId}`]: 'nms' });
+  assert.match(r.text, /Thank you/);
+  assert.strictEqual(db.prepare("SELECT engine FROM translations WHERE source = 'yumuşak tuşe'").get().engine, 'elle');
+
+  // Sonuçlar ve Excel Türkçe kalır, tuşe sütunu var
+  r = await admin('GET', `/anketler/${id}/sonuclar.csv`);
+  assert.match(r.text, /İçerik;Tuşe \/ Özellik;/);
+  assert.match(r.text, /Kaşe kumaş;%80 Yün %20 Polyamid;yumuşak tuşe;/);
+
+  // DeepL çalışmazsa yeni metinli anket taslakta bekler
+  deeplDown = true;
+  const fd2 = new FormData();
+  fd2.append('ana_kumas', 'Çevrilmemiş kumaş'); fd2.append('icerik', '%100 Keten');
+  fd2.append('images', new Blob([PNG], { type: 'image/png' }), 'c.png');
+  const m2 = modelIdFrom(await admin('POST', '/modeller', fd2));
+  const body2 = surveyBody({ title: 'Yeni İngilizce anket', models: [m2], emails: 'x@f.com', action: 'gonder' });
+  body2.set('lang', 'en');
+  r = await admin('POST', '/anketler', body2);
+  assert.match(r.location, /m=ceviri-eksik/);
+  const id2 = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  assert.strictEqual(db.prepare('SELECT published_at FROM surveys WHERE id = ?').get(id2).published_at, null);
+  r = await admin('GET', r.location);
+  assert.match(r.text, /metnin İngilizcesi eksik/);
+  deeplDown = false;
+  r = await admin('POST', `/anketler/${id2}/yayinla`);
+  assert.match(r.location, /m=yayinda/, 'DeepL dönünce eksikler çevrilip yayınlanır');
 });

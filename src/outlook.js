@@ -2,6 +2,7 @@
 // Sunucu mail göndermez; kullanıcı kendi şirket hesabından gönderir.
 const config = require('./config');
 const { formatTR } = require('./time');
+const { formatEN } = require('./dil');
 
 // Windows Outlook ve bazı tarayıcılar ~2000 karakterden uzun mailto linklerini kesiyor.
 const MAX_LENGTH = 1900;
@@ -14,8 +15,27 @@ function build({ to = [], bcc = [], subject, body }) {
   return `mailto:${to.map(enc).join(',')}?${params.join('&')}`;
 }
 
-function inviteText(survey, modelCount, ownerName) {
+function inviteText(survey, modelCount, ownerName, title = survey.title) {
   const link = `${config.baseUrl}/k/${survey.public_token}`;
+  if (survey.lang === 'en') {
+    return {
+      subject: `Your opinion matters: ${title}`,
+      body: [
+        'Hello,',
+        '',
+        `I would like your opinion on ${modelCount} models for the ${title} survey.`,
+        'Rate each model from 1 to 5, or choose "Not my style" if it is not for you. For models with options (A/B), also choose the one you would like to see in the collection.',
+        '',
+        `Take the survey: ${link}`,
+        '',
+        `The survey closes on ${formatEN(survey.closes_at)}.`,
+        '',
+        'Thank you,',
+        ownerName,
+      ].join('\n'),
+      link,
+    };
+  }
   return {
     subject: `Görüşünüz önemli: ${survey.title}`,
     body: [
@@ -36,8 +56,8 @@ function inviteText(survey, modelCount, ownerName) {
 }
 
 // Alıcılar gizli (BCC) eklenir. Link çok uzarsa alıcısız açılır; sayfadaki "Adresleri kopyala" ile eklenir.
-function inviteMailto({ survey, modelCount, ownerName, ownerEmail, emails }) {
-  const text = inviteText(survey, modelCount, ownerName);
+function inviteMailto({ survey, modelCount, ownerName, ownerEmail, emails, title }) {
+  const text = inviteText(survey, modelCount, ownerName, title);
   const full = build({ to: [ownerEmail], bcc: emails, ...text });
   if (full.length <= MAX_LENGTH) return { href: full, recipientsIncluded: true, ...text };
   return { href: build({ to: [ownerEmail], ...text }), recipientsIncluded: false, ...text };

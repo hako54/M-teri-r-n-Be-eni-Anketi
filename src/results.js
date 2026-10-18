@@ -58,6 +58,7 @@ function computeResults(surveyId) {
       code: modelCode(m.id),
       ana_kumas: m.ana_kumas,
       icerik: m.icerik,
+      ozellik: m.ozellik || '',
       kirilim: kirilim.parse(m.kirilim),
       image: images[0] ? images[0].filename : null,
       ab,
@@ -123,10 +124,10 @@ function toCsv(rows) {
 
 // A/B modellerinde her varyant ayrı satırdır.
 function resultsCsv(results) {
-  const header = ['Sıra', 'Model No', 'Ana Kumaş', 'İçerik', ...kirilim.levels, 'Test Konusu', 'Varyant', 'Varyant Adı', 'Ortalama', 'Puan Veren', 'Tarzım Değil', '1', '2', '3', '4', '5', 'Koleksiyon Tercihi', 'Kazanan'];
+  const header = ['Sıra', 'Model No', 'Ana Kumaş', 'İçerik', 'Tuşe / Özellik', ...kirilim.levels, 'Test Konusu', 'Varyant', 'Varyant Adı', 'Ortalama', 'Puan Veren', 'Tarzım Değil', '1', '2', '3', '4', '5', 'Koleksiyon Tercihi', 'Kazanan'];
   const body = [];
   results.models.forEach((m, i) => {
-    const head = [i + 1, m.code, m.ana_kumas, m.icerik, ...kirilim.levels.map((_, k) => m.kirilim[k] || '')];
+    const head = [i + 1, m.code, m.ana_kumas, m.icerik, m.ozellik, ...kirilim.levels.map((_, k) => m.kirilim[k] || '')];
     if (!m.ab) {
       body.push([...head, '', '', '', formatAvg(m.avg), m.scored, m.notMyStyle, ...m.dist, '', '']);
       return;

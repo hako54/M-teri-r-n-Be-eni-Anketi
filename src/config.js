@@ -23,5 +23,7 @@ module.exports = {
     accessKey: process.env.BACKUP_S3_ACCESS_KEY_ID || '',
     secretKey: process.env.BACKUP_S3_SECRET_ACCESS_KEY || '',
   },
+  // İngilizce anketlerde otomatik çeviri için DeepL API anahtarı (ücretsiz anahtarlar ':fx' ile biter).
+  deeplKey: (process.env.DEEPL_API_KEY || '').trim(),
   adminEmails: (process.env.ADMIN_EMAILS || '').split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean),
 };

@@ -5,13 +5,14 @@ const { formatAvg } = require('./results');
 const kirilim = require('./kirilim');
 const config = require('./config');
 const { version, asset } = require('./surum');
+const dil = require('./dil');
 const { DRAFT_DAYS, draftExpiresAt } = require('./surveys');
 
 const draftNote = (survey) => `Taslaklar ${DRAFT_DAYS} gün içinde gönderilmezse otomatik silinir. Bu taslak ${formatTR(draftExpiresAt(survey))} tarihinde silinecek.`;
 
-function layout({ title, user, body, nav = true, active = '' }) {
+function layout({ title, user, body, nav = true, active = '', lang = 'tr' }) {
   const link = (href, label, key) => html`<a href="${href}" class="${active === key ? 'on' : ''}">${label}</a>`;
-  return `<!doctype html><html lang="tr"><head><meta charset="utf-8">
+  return `<!doctype html><html lang="${lang === 'en' ? 'en' : 'tr'}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${html`${title}`} · Model Beğeni Anketi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -269,6 +270,7 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, 
       </fieldset>
       <label class="field"><span>Ana kumaş</span><input id="ana_kumas" name="ana_kumas" required maxlength="120" placeholder="ör. Viskon krep" value="${v.ana_kumas || ''}"></label>
       <label class="field"><span>İçerik</span><input id="icerik" name="icerik" required maxlength="200" placeholder="ör. %100 Viskon" value="${v.icerik || ''}"></label>
+      <label class="field"><span>Tuşe / model özelliği <em>isteğe bağlı</em></span><input id="ozellik" name="ozellik" maxlength="200" placeholder="ör. yumuşak tuşe, şardonlu, esnek, oversize kalıp" value="${v.ozellik || ''}"></label>
       ${kirilimFields(v.kirilim)}
       <div class="actions">
         <button class="btn">${isNew ? 'Modeli kaydet' : 'Değişiklikleri kaydet'}</button>
@@ -313,7 +315,7 @@ function surveysPage({ user, surveys, flash }) {
     <div class="list">
       ${surveys.map((s) => html`<div class="row card survey-row">
         <a class="row-link" href="/anketler/${s.id}">
-          <div class="row-main"><b>${s.title}</b><span class="sub">${s.model_count} model · ${s.completed}/${s.invited} yanıt · ${s.published_at ? `kapanış ${formatTR(s.closes_at)}` : `gönderilince ${s.open_days} gün açık kalır`}</span>
+          <div class="row-main"><b>${s.title}${s.lang === 'en' ? html` <span class="lang-pill">EN</span>` : ''}</b><span class="sub">${s.model_count} model · ${s.completed}/${s.invited} yanıt · ${s.published_at ? `kapanış ${formatTR(s.closes_at)}` : `gönderilince ${s.open_days} gün açık kalır`}</span>
             ${s.published_at ? '' : html`<small class="warn-note">${formatTR(draftExpiresAt(s))} tarihinde silinecek</small>`}</div>
           ${status(s)}</a>
         ${deleteSurveyForm(s, true)}
@@ -333,6 +335,10 @@ function newSurveyPage({ user, models, values = {}, errs }) {
     ${errors(errs)}
     <form class="stack" method="post" action="/anketler">
       <div class="card stack">
+        <fieldset class="lang-pick"><legend>Anket dili</legend>
+          <label><input type="radio" name="lang" value="tr" ${values.lang === 'en' ? '' : 'checked'}><span><b>Türkçe</b><small>Katılımcılar Türkçe görür</small></span></label>
+          <label><input type="radio" name="lang" value="en" ${values.lang === 'en' ? 'checked' : ''}><span><b>English</b><small>Türkçe yazın; anket İngilizceye otomatik çevrilir</small></span></label>
+        </fieldset>
         <label class="field"><span>Anket adı</span><input id="title" name="title" required maxlength="120" placeholder="ör. Yaz 2027 · Elbise seçkisi" value="${values.title || ''}"></label>
       </div>
       <div class="card">
@@ -382,7 +388,7 @@ function resultsList(models) {
         <div class="rank">${i + 1}</div>
         ${thumb(m.image, 'sm')}
         <div class="result-main">
-          <div><b>${m.code}</b> <span class="sub">· ${m.ana_kumas} · ${m.icerik}</span></div>
+          <div><b>${m.code}</b> <span class="sub">· ${m.ana_kumas} · ${m.icerik}${m.ozellik ? ` · ${m.ozellik}` : ''}</span></div>
           ${m.kirilim.length ? html`<div class="kir">${m.kirilim.join(' · ')}</div>` : ''}
           <div class="meter"><i style="width:${m.avg === null ? 0 : Math.round((m.avg / 5) * 100)}%"></i></div>
           ${m.ab ? html`<div class="sub"><span class="ab inline">A/B</span> ${m.test_konusu || 'Seçenek karşılaştırması'} · ${m.winner ? html`önde: <b>${m.winner.letter}${m.winner.label ? ` · ${m.winner.label}` : ''}</b>` : 'henüz oy yok'}</div>
@@ -402,7 +408,26 @@ function resultsList(models) {
     </div>`;
 }
 
-function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, resultHtml, flash, autoOpenOutlook, links, invite, invitedEmails, resultMailto }) {
+// İngilizce ankette katılımcının göreceği metinler: Türkçesi, İngilizcesi (düzeltilebilir).
+function translationsCard(survey, translations, deeplEnabled) {
+  const missing = translations.filter((t) => !t.en).length;
+  return html`<form class="card stack" id="ceviriler" method="post" action="/anketler/${survey.id}/ceviri">
+    <div class="label">İngilizce metinler <span class="lang-pill">EN</span></div>
+    <p class="sub">${deeplEnabled ? 'Metinler DeepL ile otomatik çevrildi. Kontrol edip gerekirse düzeltin; düzeltmeniz sonraki anketlerde de kullanılır.' : html`Otomatik çeviri için DeepL anahtarı henüz ayarlı değil. İngilizce metinleri aşağıya yazın.`}</p>
+    ${missing ? html`<div class="info">${missing} metnin İngilizcesi eksik. Eksik çeviri varken anket gönderilmez.</div>` : ''}
+    <div class="tr-list">${translations.map((t) => html`<div class="tr-row">
+      <div class="tr-src"><small>${t.label}</small><span>${t.source}</span></div>
+      <input type="hidden" name="src" value="${t.source}">
+      <input name="en" maxlength="500" placeholder="English" value="${t.en || ''}" aria-label="${t.label} İngilizcesi" class="${t.en ? '' : 'missing-input'}">
+    </div>`)}</div>
+    <div class="actions">
+      <button class="btn btn-sm">İngilizce metinleri kaydet</button>
+      ${deeplEnabled && missing ? html`<button class="btn btn-sm btn-soft" formaction="/anketler/${survey.id}/ceviri/otomatik" formnovalidate>Eksikleri otomatik çevir</button>` : ''}
+    </div>
+  </form>`;
+}
+
+function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, resultHtml, flash, translations, deeplEnabled, autoOpenOutlook, links, invite, invitedEmails, resultMailto }) {
   const { survey, invited, completed, models } = results;
   const state = surveyState(survey);
   const rate = invited ? Math.min(100, Math.round((completed / invited) * 100)) : 0;
@@ -447,9 +472,10 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     title: survey.title, user, active: 'anketler',
     body: html`
     <a class="back" href="/anketler">← Anketler</a>
-    <div class="head"><div><h1>${survey.title}</h1><p class="sub">${subline}</p></div>
+    <div class="head"><div><h1>${survey.title}${survey.lang === 'en' ? html` <span class="lang-pill">EN</span>` : ''}</h1><p class="sub">${subline}</p></div>
       ${state === 'taslak' ? html`<span class="pill wait">Taslak</span>` : ''}</div>
     ${flash ? html`<div class="ok">${flash}</div>` : ''}
+    ${translations && state === 'taslak' ? translationsCard(survey, translations, deeplEnabled) : ''}
     ${state === 'taslak' ? draftPanel : ''}
     ${state === 'acik' ? livePanel : ''}
     ${state === 'kapali' ? html`<div class="card stack result-mail ${survey.result_opened_at ? '' : 'pending'}">
@@ -493,59 +519,67 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     </tbody></table></div>` : html`
     <h2>Ankette ${models.length} model var</h2>
     <div class="pick">${models.map((m) => html`<div class="pick-item">${thumb(m.image)}<span class="no">${m.code}</span>${m.ab ? html`<span class="ab">A/B</span>` : ''}<small>${m.ana_kumas}</small></div>`)}</div>`}
+    ${translations && state !== 'taslak' ? translationsCard(survey, translations, deeplEnabled) : ''}
     <div class="danger-zone">${deleteSurveyForm({ ...survey, completed }, false)}</div>
     <script src="${asset('/static/kopyala.js')}"></script>
     ${autoOpenOutlook && invite ? raw(`<script>setTimeout(function(){var a=document.getElementById('outlook');if(!a)return;if(window.openMail)window.openMail(a.getAttribute('href'));else window.location.href=a.href;},400);</script>`) : ''}`,
   });
 }
 
-function rating(name, legend) {
+function rating(name, legend, L) {
   return html`<fieldset class="rate"><legend>${legend}</legend>
     <div class="stars">${[1, 2, 3, 4, 5].map((n) => html`<label><input type="radio" name="${name}" value="${n}" required><span>${n}</span></label>`)}</div>
-    <div class="scale-hint"><span>Hiç beğenmedim</span><span>Çok beğendim</span></div>
-    <label class="nms"><input type="radio" name="${name}" value="nms"><span>Tarzım değil</span></label>
+    <div class="scale-hint"><span>${L.hateIt}</span><span>${L.loveIt}</span></div>
+    <label class="nms"><input type="radio" name="${name}" value="nms"><span>${L.notMyStyle}</span></label>
   </fieldset>`;
 }
 
+// Modelin kumaş, içerik ve (varsa) tuşe/özellik satırı.
+function modelInfo(m) {
+  return html`<div class="step-info"><b>${m.code}</b><span>${m.ana_kumas} · ${m.icerik}</span>${m.ozellik ? html`<span class="ozellik">${m.ozellik}</span>` : ''}</div>`;
+}
+
 // A/B adımı: her seçenek ayrı puanlanır, sonra koleksiyon için bir tercih yapılır.
-function abStep(m) {
-  const name = (im) => im.label || `Seçenek ${im.letter}`;
+function abStep(m, L) {
+  const name = (im) => im.label || L.option(im.letter);
   return html`
-    <div class="step-info"><b>${m.code}</b><span>${m.ana_kumas} · ${m.icerik}</span></div>
-    <div class="ab-intro"><span class="ab inline">A/B</span> <b>${m.test_konusu || 'Seçenek karşılaştırması'}</b><br>
-      Bu modelin ${m.images.length} seçeneği var. Her birini puanlayın, sonra koleksiyonda hangisinin olmasını istediğinizi seçin.</div>
+    ${modelInfo(m)}
+    <div class="ab-intro"><span class="ab inline">A/B</span> <b>${m.test_konusu || L.abDefault}</b><br>
+      ${L.abIntro(m.images.length)}</div>
     ${m.images.map((im) => html`<div class="variant-rate">
       <div class="tile-img"><img class="ph wide" src="/uploads/${im.filename}" alt="${m.code} ${im.letter}"><span class="no big">${im.letter}</span></div>
-      ${rating(`r_${m.id}_${im.id}`, `${im.letter} · ${name(im)}`)}
+      ${rating(`r_${m.id}_${im.id}`, `${im.letter} · ${name(im)}`, L)}
     </div>`)}
-    <fieldset class="rate pickset"><legend>Koleksiyonda hangisinin olmasını istersiniz?</legend>
+    <fieldset class="rate pickset"><legend>${L.abQuestion}</legend>
       <div class="picks">${m.images.map((im) => html`<label><input type="radio" name="p_${m.id}" value="${im.id}" required>
         <span><img src="/uploads/${im.filename}" alt=""><b>${im.letter}</b><small>${im.label || ''}</small></span></label>`)}
-        <label class="none"><input type="radio" name="p_${m.id}" value="0"><span><b>Hiçbiri</b></span></label></div>
+        <label class="none"><input type="radio" name="p_${m.id}" value="0"><span><b>${L.none}</b></span></label></div>
     </fieldset>`;
 }
 
-function participantPage({ survey, models, email, test = false }) {
+// survey.title ve models, sunucuda anketin diline çevrilmiş olarak gelir.
+function participantPage({ survey, title, models, email, test = false }) {
+  const L = dil.t(survey.lang);
   const total = models.length;
   return layout({
-    title: survey.title, nav: false,
+    title, nav: false, lang: survey.lang,
     body: html`
     <form class="survey" method="post" id="survey">
-      ${test ? html`<div class="testbar"><b>TEST</b> Bu bir deneme. Yanıtlar kaydedilmez ve sonuçlara katılmaz.</div>` : ''}
-      <div class="survey-head"><div class="sub">${total} model · ${survey.published_at ? `${formatTR(survey.closes_at)} tarihine kadar açık` : 'henüz canlıda değil'}</div><h1>${survey.title}</h1>
+      ${test ? html`<div class="testbar"><b>TEST</b> ${L.testBar}</div>` : ''}
+      <div class="survey-head"><div class="sub">${total} ${L.model(total)} · ${survey.published_at ? L.openUntil(L.date(survey.closes_at)) : L.notLive}</div><h1>${title}</h1>
         ${email ? html`<div class="sub">${email}</div>` : ''}
         <div class="dots" aria-hidden="true">${models.map((_, i) => html`<i class="${i === 0 ? 'on' : ''}"></i>`)}</div></div>
       ${models.map((m, i) => html`
       <section class="step card" data-step="${i}">
         <div class="step-no">${i + 1} / ${total}</div>
-        ${m.ab ? abStep(m) : html`
-        <div class="step-imgs">${m.images.length ? m.images.map((im) => html`<img src="/uploads/${im.filename}" alt="${m.code}">`) : html`<div class="ph ph-empty">Görsel yok</div>`}</div>
-        <div class="step-info"><b>${m.code}</b><span>${m.ana_kumas} · ${m.icerik}</span></div>
-        ${rating(`r_${m.id}`, 'Bu modeli ne kadar beğendiniz?')}`}
-        <label class="field"><span>Yorumunuz <em>isteğe bağlı</em></span><textarea name="c_${m.id}" rows="2" maxlength="1000" placeholder="Kalıp, renk, kumaş hakkında bir not…"></textarea></label>
+        ${m.ab ? abStep(m, L) : html`
+        <div class="step-imgs">${m.images.length ? m.images.map((im) => html`<img src="/uploads/${im.filename}" alt="${m.code}">`) : html`<div class="ph ph-empty">${L.noImage}</div>`}</div>
+        ${modelInfo(m)}
+        ${rating(`r_${m.id}`, L.howMuch, L)}`}
+        <label class="field"><span>${L.comment} <em>${L.optional}</em></span><textarea name="c_${m.id}" rows="2" maxlength="1000" placeholder="${L.commentHint}"></textarea></label>
         <div class="step-nav">
-          ${i > 0 ? html`<button type="button" class="btn btn-soft" data-go="-1">Geri</button>` : ''}
-          ${i < total - 1 ? html`<button type="button" class="btn" data-go="1">Sonraki</button>` : html`<button class="btn">${test ? 'Testi bitir' : 'Anketi gönder'}</button>`}
+          ${i > 0 ? html`<button type="button" class="btn btn-soft" data-go="-1">${L.back}</button>` : ''}
+          ${i < total - 1 ? html`<button type="button" class="btn" data-go="1">${L.next}</button>` : html`<button class="btn">${test ? L.finishTest : L.submit}</button>`}
         </div>
       </section>`)}
     </form>
@@ -553,21 +587,24 @@ function participantPage({ survey, models, email, test = false }) {
   });
 }
 
-// Ortak linkten gelen katılımcı e-postasını yazar.
-function joinPage({ survey, modelCount, email = '', errs }) {
+// Ortak linkten gelen katılımcı kullanıcı adını yazar.
+function joinPage({ survey, title, modelCount, email = '', errs }) {
+  const L = dil.t(survey.lang);
   return layout({
-    title: survey.title, nav: false,
+    title, nav: false, lang: survey.lang,
     body: html`
     <div class="auth">
       <div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>
-      <h1>${survey.title}</h1>
-      <p class="sub">${modelCount} model · ${formatTR(survey.closes_at)} tarihine kadar açık. Başlamak için kullanıcı adınızı yazın.</p>
+      <h1>${title}</h1>
+      <p class="sub">${L.joinIntro(modelCount, L.date(survey.closes_at))}</p>
       ${errors(errs)}
       <form method="post" class="stack">
-        ${usernameField(email, 'username', 'email', 'email')}
-        <button class="btn">Ankete başla</button>
+        <label class="field"><span>${L.username}</span>
+          <div class="domain-input"><input id="email" name="email" required autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ad.soyad" value="${email}"><em>@${config.companyDomain}</em></div>
+          <small>${L.usernameHint}</small></label>
+        <button class="btn">${L.start}</button>
       </form>
-      <p class="center small sub">Her kişi anketi bir kez doldurabilir. Şirket dışından katılıyorsanız tam e-posta adresinizi yazın.</p>
+      <p class="center small sub">${L.joinNote}</p>
     </div>`,
   });
 }
@@ -585,9 +622,9 @@ function publicResultPage({ results }) {
   });
 }
 
-function messagePage({ title, text, link }) {
+function messagePage({ title, text, link, lang }) {
   return layout({
-    title, nav: false,
+    title, nav: false, lang,
     body: html`<div class="auth center"><div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div><h1>${title}</h1><p class="sub">${text}</p>
       ${link ? html`<a class="btn btn-soft" href="${link.href}">${link.label}</a>` : ''}</div>`,
   });

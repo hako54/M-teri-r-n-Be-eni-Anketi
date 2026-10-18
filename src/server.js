@@ -20,6 +20,8 @@ const outlook = require('./outlook');
 const yedek = require('./yedek');
 const s3 = require('./s3');
 const { companyAccount, toAddress } = require('./kullanici');
+const dil = require('./dil');
+const ceviri = require('./ceviri');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -223,9 +225,9 @@ const modelList = (q = '', marka = '') => {
     SELECT m.*, (SELECT COUNT(*) FROM model_images i WHERE i.model_id = m.id) AS image_count,
       (SELECT COUNT(*) FROM survey_models sm WHERE sm.model_id = m.id) AS survey_count
     FROM models m
-    WHERE (? = '' OR m.ana_kumas LIKE ? OR m.icerik LIKE ? OR m.kirilim LIKE ? OR printf('MDL-%04d', m.id) LIKE ?)
+    WHERE (? = '' OR m.ana_kumas LIKE ? OR m.icerik LIKE ? OR m.ozellik LIKE ? OR m.kirilim LIKE ? OR printf('MDL-%04d', m.id) LIKE ?)
       AND (? = '' OR json_extract(m.kirilim, '$[0]') = ?)
-    ORDER BY m.id DESC`).all(q, like, like, like, like, marka, marka)
+    ORDER BY m.id DESC`).all(q, like, like, like, like, like, marka, marka)
     .map((m) => ({ ...m, image: firstImage(m.id), kirilim: kirilim.parse(m.kirilim) }));
 };
 
@@ -275,7 +277,7 @@ app.get('/kirilim', auth.requireUser, (req, res) => {
 });
 
 app.post('/modeller', auth.requireUser, upload.array('images'), (req, res) => {
-  const values = { ana_kumas: field(req.body.ana_kumas, 120), icerik: field(req.body.icerik, 200), ...abFields(req.body), kirilim: kirilimField(req.body) };
+  const values = { ana_kumas: field(req.body.ana_kumas, 120), icerik: field(req.body.icerik, 200), ozellik: field(req.body.ozellik, 200) || null, ...abFields(req.body), kirilim: kirilimField(req.body) };
   const labels = [].concat(req.body.labels || []);
   const errs = [];
   if (!req.files || !req.files.length) errs.push('En az bir görsel ekleyin (JPG, PNG, WEBP, HEIC).');
@@ -289,8 +291,8 @@ app.post('/modeller', auth.requireUser, upload.array('images'), (req, res) => {
     return send(res, views.modelFormPage({ user: req.user, nextCode: nextModelCode(), values: { ...values, kirilim: null }, errs }), 400);
   }
   const id = tx(() => {
-    const { lastInsertRowid } = db.prepare('INSERT INTO models (user_id, ana_kumas, icerik, ab_test, test_konusu, kirilim) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(req.user.id, values.ana_kumas, values.icerik, values.ab_test, values.test_konusu, values.kirilim);
+    const { lastInsertRowid } = db.prepare('INSERT INTO models (user_id, ana_kumas, icerik, ozellik, ab_test, test_konusu, kirilim) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(req.user.id, values.ana_kumas, values.icerik, values.ozellik, values.ab_test, values.test_konusu, values.kirilim);
     const addImg = db.prepare('INSERT INTO model_images (model_id, filename, label, sort_order) VALUES (?, ?, ?, ?)');
     req.files.forEach((f, i) => addImg.run(lastInsertRowid, f.filename, field(labels[i], 80) || null, i));
     return lastInsertRowid;
@@ -315,6 +317,7 @@ app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) =
   if (!model) { removeFiles(req.files); return res.redirect('/modeller'); }
   const ana = field(req.body.ana_kumas, 120);
   const icerik = field(req.body.icerik, 200);
+  const ozellik = field(req.body.ozellik, 200) || null;
   const ab = abFields(req.body);
   const kir = kirilimField(req.body);
   const images = modelImages(model.id);
@@ -329,8 +332,8 @@ app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) =
   }
   const labels = [].concat(req.body.labels || []);
   tx(() => {
-    db.prepare('UPDATE models SET ana_kumas = ?, icerik = ?, ab_test = ?, test_konusu = ?, kirilim = ? WHERE id = ?')
-      .run(ana, icerik, ab.ab_test, ab.test_konusu, kir, model.id);
+    db.prepare('UPDATE models SET ana_kumas = ?, icerik = ?, ozellik = ?, ab_test = ?, test_konusu = ?, kirilim = ? WHERE id = ?')
+      .run(ana, icerik, ozellik, ab.ab_test, ab.test_konusu, kir, model.id);
     const setLabel = db.prepare('UPDATE model_images SET label = ? WHERE id = ?');
     for (const im of images) {
       if (`label_${im.id}` in req.body) setLabel.run(field(req.body[`label_${im.id}`], 80) || null, im.id);
@@ -383,7 +386,13 @@ app.get('/anketler/yeni', auth.requireUser, (req, res) => {
   send(res, views.newSurveyPage({ user: req.user, models: modelList(), values: { modelIds: pre } }));
 });
 
-app.post('/anketler', auth.requireUser, (req, res) => {
+// Canlıya alır; İngilizce ankette çevirisi eksik metin varsa taslakta bırakır.
+function publishOrExplain(survey) {
+  if (survey.lang === 'en' && ceviri.missingFor(survey).length) return 'ceviri-eksik';
+  return surveys.publishSurvey(survey) ? 'yayinda' : 'gecmis';
+}
+
+app.post('/anketler', auth.requireUser, async (req, res) => {
   const rawIds = [].concat(req.body.models || []);
   const values = {
     title: field(req.body.title, 120),
@@ -392,6 +401,7 @@ app.post('/anketler', auth.requireUser, (req, res) => {
     days: Number(req.body.days),
     hour: field(req.body.hour, 5),
     result_emails: field(req.body.result_emails, 1000),
+    lang: req.body.lang === 'en' ? 'en' : 'tr',
   };
   const errs = [];
   const emails = surveys.parseEmails(values.emails);
@@ -411,13 +421,13 @@ app.post('/anketler', auth.requireUser, (req, res) => {
 
   const id = surveys.createSurvey({
     userId: req.user.id, title: values.title, modelIds: existing, emails: emails.valid,
-    resultEmails: resultEmails.valid, days: values.days, hour: values.hour,
+    resultEmails: resultEmails.valid, days: values.days, hour: values.hour, lang: values.lang,
   });
+  const survey = db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
+  // İngilizce anket: metinler hemen çevrilir; eksik kalırsa anket taslakta bekler.
+  if (survey.lang === 'en') await ceviri.translateSurvey(survey);
   // "Oluştur ve gönder": hemen canlıya alır ve Outlook'u açar; "Taslak olarak kaydet": sonra gönderilir.
-  if (req.body.action === 'gonder') {
-    const survey = db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
-    return res.redirect(`/anketler/${id}?m=${surveys.publishSurvey(survey) ? 'yayinda' : 'gecmis'}`);
-  }
+  if (req.body.action === 'gonder') return res.redirect(`/anketler/${id}?m=${publishOrExplain(survey)}`);
   res.redirect(`/anketler/${id}?m=taslak`);
 });
 
@@ -432,6 +442,8 @@ app.get('/anketler/:id', auth.requireUser, (req, res) => {
     yayinda: 'Anket canlıda. Outlook açıldıysa maili kontrol edip gönderin. Kapanışta sonucu göndermeyi unutmamak için hatırlatıcıyı takviminize ekleyin.',
     gecmis: 'Bitiş zamanı geçmişte kalıyor. Anketi yeniden oluşturun ya da daha uzun süre seçin.',
     kapatildi: 'Anket kapatıldı. Sonucu aşağıdan Outlook ile gönderebilirsiniz.',
+    'ceviri-eksik': 'Bazı metinlerin İngilizcesi eksik, bu yüzden anket taslak olarak bekliyor. Aşağıdaki İngilizce metinleri tamamlayıp “Gönder”e basın.',
+    ceviri: 'İngilizce metinler kaydedildi.',
   };
   const results = computeResults(survey.id);
   const owner = { name: req.user.username, email: req.user.email };
@@ -441,6 +453,8 @@ app.get('/anketler/:id', auth.requireUser, (req, res) => {
     draftExpiresAt: surveys.draftExpiresAt(survey),
     results,
     invitations: db.prepare('SELECT * FROM invitations WHERE survey_id = ? ORDER BY completed_at IS NULL, invited DESC, email').all(survey.id),
+    translations: survey.lang === 'en' ? ceviri.surveyTexts(survey) : null,
+    deeplEnabled: ceviri.enabled(),
     resultHtml: survey.closed_at || (survey.published_at && new Date(survey.closes_at) <= new Date()) ? resultEmail(results) : null,
     flash: flashes[req.query.m],
     autoOpenOutlook: req.query.m === 'yayinda',
@@ -451,6 +465,7 @@ app.get('/anketler/:id', auth.requireUser, (req, res) => {
     },
     invite: survey.published_at ? outlook.inviteMailto({
       survey, modelCount: results.models.length, ownerName: owner.name, ownerEmail: owner.email, emails: invitedEmails(survey.id),
+      title: surveyTitle(survey),
     }) : null,
     invitedEmails: invitedEmails(survey.id),
     resultMailto: outlook.resultMailto({ results, to: survey.result_emails.split(',').filter(Boolean) }),
@@ -458,12 +473,34 @@ app.get('/anketler/:id', auth.requireUser, (req, res) => {
   }));
 });
 
-app.post('/anketler/:id/yayinla', auth.requireUser, (req, res) => {
+app.post('/anketler/:id/yayinla', auth.requireUser, async (req, res) => {
   const survey = ownSurvey(req);
   if (!survey) return res.redirect('/anketler');
   if (survey.published_at) return res.redirect(`/anketler/${survey.id}`);
-  const closes = surveys.publishSurvey(survey);
-  res.redirect(`/anketler/${survey.id}?m=${closes ? 'yayinda' : 'gecmis'}`);
+  if (survey.lang === 'en') await ceviri.translateSurvey(survey);
+  res.redirect(`/anketler/${survey.id}?m=${publishOrExplain(survey)}`);
+});
+
+// İngilizce metinleri elle düzeltir; değişmeyen çeviriler olduğu gibi kalır.
+app.post('/anketler/:id/ceviri', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey) return res.redirect('/anketler');
+  const sources = [].concat(req.body.src || []);
+  const values = [].concat(req.body.en || []);
+  const allowed = new Set(ceviri.surveyTexts(survey).map((t) => t.source));
+  sources.forEach((src, i) => {
+    if (!allowed.has(src)) return;
+    const value = field(values[i], 500);
+    if (value !== (ceviri.lookup(src) || '')) ceviri.setManual(src, value);
+  });
+  res.redirect(`/anketler/${survey.id}?m=ceviri#ceviriler`);
+});
+
+app.post('/anketler/:id/ceviri/otomatik', auth.requireUser, async (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey) return res.redirect('/anketler');
+  await ceviri.translateSurvey(survey);
+  res.redirect(`/anketler/${survey.id}#ceviriler`);
 });
 
 // Anketi siler: davetler, yanıtlar, yorumlar ve tercihler de silinir (veritabanında zincirleme). Modeller kalır.
@@ -552,14 +589,19 @@ app.get('/anketler/:id/sonuclar.csv', auth.requireUser, (req, res) => {
 
 // ---------- Katılımcı (giriş gerekmez) ----------
 const isOpen = (survey) => Boolean(survey.published_at) && !survey.closed_at && new Date(survey.closes_at) > new Date();
-const closedText = (survey) => `Bu anket ${formatTR(survey.closed_at || survey.closes_at)} tarihinde kapandı.`;
 
-function participantModels(surveyId) {
-  return surveys.surveyModels(surveyId).map((m) => {
-    const images = modelImages(m.id);
-    return { ...m, images, ab: isAbTest(m, images) };
+// Katılımcıya gösterilecek modeller; İngilizce ankette metinler çevrilmiş halde.
+function participantModels(survey) {
+  const tx = ceviri.tr2(survey.lang);
+  return surveys.surveyModels(survey.id).map((m) => {
+    const images = modelImages(m.id).map((im) => ({ ...im, label: tx(im.label) }));
+    return {
+      ...m, images, ab: isAbTest(m, images),
+      ana_kumas: tx(m.ana_kumas), icerik: tx(m.icerik), ozellik: tx(m.ozellik), test_konusu: tx(m.test_konusu),
+    };
   });
 }
+const surveyTitle = (survey) => ceviri.tr2(survey.lang)(survey.title);
 
 // Formdaki yanıtları okur; eksik varsa ilgili model numarasını döner.
 function parseAnswers(surveyId, body) {
@@ -592,17 +634,22 @@ function parseAnswers(surveyId, body) {
   return { answers };
 }
 
-const missingPage = (res, code) => send(res, views.messagePage({ title: 'Eksik yanıt', text: `${code} için bütün seçenekleri değerlendirin. Geri dönüp tamamlayabilirsiniz.` }), 400);
+const missingPage = (res, survey, code) => {
+  const L = dil.t(survey.lang);
+  send(res, views.messagePage({ title: L.missingTitle, text: L.missingText(code), lang: survey.lang }), 400);
+};
+const participantMessage = (res, survey, title, text, status = 200) => send(res, views.messagePage({ title, text, lang: survey && survey.lang }), status);
 
 // Ortak link (Outlook mailindeki): katılımcı e-postasını yazar, kendine ait ankete yönlenir.
 const surveyByPublic = (token) => db.prepare('SELECT * FROM surveys WHERE public_token = ?').get(String(token));
 
 app.get('/k/:token', (req, res) => {
   const survey = surveyByPublic(req.params.token);
-  if (!survey) return send(res, views.messagePage({ title: 'Link geçersiz', text: 'Bu anket linki bulunamadı. Maildeki linki eksiksiz açtığınızdan emin olun.' }), 404);
-  if (!survey.published_at) return send(res, views.messagePage({ title: 'Anket henüz başlamadı', text: 'Bu anket henüz canlıya alınmadı.' }));
-  if (!isOpen(survey)) return send(res, views.messagePage({ title: 'Anket kapandı', text: closedText(survey) }));
-  send(res, views.joinPage({ survey, modelCount: surveys.surveyModels(survey.id).length }));
+  const L = dil.t(survey && survey.lang);
+  if (!survey) return participantMessage(res, null, L.invalidTitle, L.invalidText, 404);
+  if (!survey.published_at) return participantMessage(res, survey, L.notStartedTitle, L.notStartedText);
+  if (!isOpen(survey)) return participantMessage(res, survey, L.closedTitle, L.closedText(L.date(survey.closed_at || survey.closes_at)));
+  send(res, views.joinPage({ survey, title: surveyTitle(survey), modelCount: surveys.surveyModels(survey.id).length }));
 });
 
 app.post('/k/:token', (req, res) => {
@@ -611,7 +658,8 @@ app.post('/k/:token', (req, res) => {
   const entered = field(req.body.email, 120);
   const email = toAddress(entered);
   if (!email) {
-    return send(res, views.joinPage({ survey, modelCount: surveys.surveyModels(survey.id).length, email: entered, errs: ['Kullanıcı adınızı şirket e-postanızın @ öncesi olarak yazın (ör. ad.soyad).'] }), 400);
+    const L = dil.t(survey.lang);
+    return send(res, views.joinPage({ survey, title: surveyTitle(survey), modelCount: surveys.surveyModels(survey.id).length, email: entered, errs: [L.joinError] }), 400);
   }
   const invitation = surveys.joinSurvey(survey.id, email);
   res.redirect(`/a/${invitation.token}`);
@@ -625,19 +673,21 @@ function loadInvitation(token) {
 
 app.get('/a/:token', (req, res) => {
   const { invitation, survey } = loadInvitation(req.params.token);
-  if (!invitation) return send(res, views.messagePage({ title: 'Link geçersiz', text: 'Bu anket linki bulunamadı.' }), 404);
-  if (invitation.completed_at) return send(res, views.messagePage({ title: 'Teşekkürler', text: 'Bu anketi tamamladınız. Görüşleriniz kaydedildi.' }));
-  if (!isOpen(survey)) return send(res, views.messagePage({ title: 'Anket kapandı', text: closedText(survey) }));
-  send(res, views.participantPage({ survey, models: participantModels(survey.id), email: invitation.email }));
+  const L = dil.t(survey && survey.lang);
+  if (!invitation) return participantMessage(res, null, L.invalidTitle, L.invalidText, 404);
+  if (invitation.completed_at) return participantMessage(res, survey, L.thanksTitle, L.alreadyDone);
+  if (!isOpen(survey)) return participantMessage(res, survey, L.closedTitle, L.closedText(L.date(survey.closed_at || survey.closes_at)));
+  send(res, views.participantPage({ survey, title: surveyTitle(survey), models: participantModels(survey), email: invitation.email }));
 });
 
 app.post('/a/:token', (req, res) => {
   const { invitation, survey } = loadInvitation(req.params.token);
   if (!invitation || invitation.completed_at || !isOpen(survey)) return res.redirect(`/a/${encodeURIComponent(req.params.token)}`);
   const { answers, missing } = parseAnswers(survey.id, req.body);
-  if (missing) return missingPage(res, missing);
+  if (missing) return missingPage(res, survey, missing);
   surveys.submitResponses(invitation.id, answers);
-  send(res, views.messagePage({ title: 'Teşekkürler', text: `Görüşleriniz kaydedildi. Anket ${formatTR(survey.closes_at)} tarihinde kapanacak.` }));
+  const L = dil.t(survey.lang);
+  participantMessage(res, survey, L.thanksTitle, L.saved(L.date(survey.closes_at)));
 });
 
 // Test linki: yalnızca admin; anketi canlıya almadan önce ve sonra denemek için. Yanıtlar kaydedilmez.
@@ -646,18 +696,18 @@ const surveyByTest = (token) => db.prepare('SELECT * FROM surveys WHERE test_tok
 app.get('/t/:token', auth.requireAdmin, (req, res) => {
   const survey = surveyByTest(req.params.token);
   if (!survey) return send(res, views.messagePage({ title: 'Link geçersiz', text: 'Bu test linki bulunamadı.' }), 404);
-  send(res, views.participantPage({ survey, models: participantModels(survey.id), test: true }));
+  send(res, views.participantPage({ survey, title: surveyTitle(survey), models: participantModels(survey), test: true }));
 });
 
 app.post('/t/:token', auth.requireAdmin, (req, res) => {
   const survey = surveyByTest(req.params.token);
   if (!survey) return res.redirect(`/t/${encodeURIComponent(req.params.token)}`);
   const { missing } = parseAnswers(survey.id, req.body);
-  if (missing) return missingPage(res, missing);
+  if (missing) return missingPage(res, survey, missing);
+  const L = dil.t(survey.lang);
   send(res, views.messagePage({
-    title: 'Test tamamlandı',
-    text: 'Anket sorunsuz çalışıyor. Bu test yanıtları kaydedilmedi ve sonuçlara katılmaz.',
-    link: { href: `/t/${survey.test_token}`, label: 'Testi tekrarla' },
+    title: L.testDoneTitle, text: L.testDoneText, lang: survey.lang,
+    link: { href: `/t/${survey.test_token}`, label: L.testAgain },
   }));
 });
 

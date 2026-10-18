@@ -61,7 +61,7 @@ function modelHead(m, i, y) {
     text(52, y + 44, String(i + 1), { size: 26, weight: 800, fill: C.accent }),
     image(m.image, 88, y + 18, 104, 136),
     text(214, y + 46, `${m.code} · ${trunc(m.ana_kumas, 40)}`, { size: 21, weight: 800 }),
-    text(214, y + 70, trunc(m.icerik, 70), { size: 15, fill: C.muted }),
+    text(214, y + 70, trunc(m.ozellik ? `${m.icerik} · ${m.ozellik}` : m.icerik, 80), { size: 15, fill: C.muted }),
   ];
   if (m.kirilim.length) parts.push(text(214, y + 92, trunc(m.kirilim.join(' · '), 95), { size: 13, weight: 700, fill: C.accentInk }));
   parts.push(bar(214, y + 106, 600, m.avg));

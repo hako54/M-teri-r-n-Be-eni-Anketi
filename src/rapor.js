@@ -68,7 +68,7 @@ function resultEmail(results) {
           <td width="64" valign="top">${m.image ? raw(`<img src="${imgUrl(m.image)}" alt="" width="56" style="width:56px;border-radius:10px;display:block">`) : ''}</td>
           <td valign="top">
             <div style="font-size:14px;font-weight:800">${m.code} <span style="font-weight:400;color:${C.muted}">· ${m.ana_kumas}</span></div>
-            <div style="font-size:12px;color:${C.muted}">${m.icerik}</div>
+            <div style="font-size:12px;color:${C.muted}">${m.icerik}${m.ozellik ? ` · ${m.ozellik}` : ''}</div>
             <div style="background:${C.soft};border-radius:4px;height:7px;margin:7px 0 4px"><div style="background:${C.accent};border-radius:4px;height:7px;width:${pct}%"></div></div>
             ${m.ab ? abBlock(m) : html`<div style="font-size:12px;color:${C.muted}">${m.scored} kişi puan verdi · ${m.notMyStyle} tarzım değil</div>
             <div style="font-size:12px;color:${C.muted};margin-top:2px">${m.dist.map((n, k) => html`<span style="white-space:nowrap;margin-right:8px"><b style="color:${C.ink}">${k + 1}:</b> ${n}</span>`)}</div>`}

@@ -16,6 +16,8 @@ Model görsellerini yükleyip beğeni anketi yapan web uygulaması. Davet ve son
 - **Taslak:** "Taslak olarak kaydet" ile kaydedilen anket sonra "Gönder" ile canlıya alınır. Gönderilmeyen taslaklar 7 gün sonra otomatik silinir.
 - **Yönetici girişi:** `/yonetici` adresinde ayrı bir giriş sayfası. Hesaplar aynıdır; yalnızca `ADMIN_EMAILS` listesindeki hesaplar girebilir ve doğrudan Yönetim sayfasına yönlenir. Normal giriş sayfasının altında bağlantısı vardır.
 - **Test linki (yalnızca admin):** Admin, anketi canlıya almadan önce katılımcının göreceği şekilde dener; test yanıtları kaydedilmez. Adminler `ADMIN_EMAILS` ayarındaki adreslerle kayıtlı kullanıcılardır.
+- **İngilizce anket:** Anket oluştururken en başta dil seçilir. "English" seçilirse Türkçe yazılan anket adı, ana kumaş, içerik, tuşe, A/B konusu ve seçenek adları DeepL ile İngilizceye çevrilir (`DEEPL_API_KEY`); katılımcı ekranı ve davet maili İngilizce olur. Çeviriler anket sayfasındaki "İngilizce metinler" kartında görünür ve düzeltilebilir; düzeltilen çeviri sonraki anketlerde de kullanılır. Çevirisi eksik metin varsa anket gönderilmez, taslakta bekler. Sonuçlar ve raporlar Türkçe kalır.
+- **Tuşe / model özelliği:** Model formunda isteğe bağlı alan; katılımcı ekranında, sonuçlarda, PDF'te ve Excel'de görünür, aramada bulunur.
 - **Katılımcı ekranı:** Telefonda modeller tek tek gösterilir. Her model için 1–5 puan **veya "Tarzım değil"** seçilir (ortalamaya katılmaz); isteğe bağlı yorum yazılır.
 - **Kapanış hatırlatıcısı:** Canlıdaki anket sayfasından kapanış anı için Outlook takvimine hatırlatıcı (.ics) eklenir; hatırlatıcıdaki link sonuç maili sayfasını açar.
 - **Sonuç maili (ekli ve görselli):** Anket bitiş günü ve saatinde kendiliğinden kapanır. Sonuç raporu bir görsel (PNG) olarak üretilir.
@@ -64,6 +66,7 @@ Uygulama mail göndermez: davet, test ve sonuç mailleri `mailto:` linkleriyle k
 | `REGISTRATION_CODE` | Doluysa yalnızca bu kodu bilenler hesap açabilir. |
 | `COMPANY_DOMAIN` | Kullanıcı adlarının çevrildiği şirket alan adı (varsayılan `lcwaikiki.com`). |
 | `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Yedeklerin gönderileceği S3 uyumlu depolama alanı. Railway'de bucket değişken referanslarıyla verilir (`${{yedek.ENDPOINT}}` …). Boşsa yalnızca diske yedeklenir. |
+| `DEEPL_API_KEY` | İngilizce anketlerde otomatik çeviri için DeepL API anahtarı (ücretsiz plan anahtarları `:fx` ile biter). Boşsa İngilizce metinler elle yazılır. |
 | `ADMIN_EMAILS` | Admin kullanıcıların e-postaları (noktalı virgül veya virgülle). Test linkini yalnızca onlar görür. |
 
 ## Yayına alma
@@ -82,6 +85,8 @@ src/rapor.js      sonuç raporu HTML'i (Outlook'a yapıştırılır)
 src/gorsel.js     sonuç raporu görseli (PNG, assets/fonts ile çizilir)
 src/eml.js        ekli ve görselli Outlook taslağı (.eml)
 src/pdf.js        PDF sonuç raporu (pdfkit)
+src/ceviri.js     DeepL çevirisi ve çeviri önbelleği
+src/dil.js        katılımcı ekranı metinleri (Türkçe / İngilizce)
 src/kirilim.js    alt kırılımlı ürün grupları
 src/kullanici.js  kullanıcı adı ↔ şirket e-postası
 src/yedek.js      günlük yedek (disk + depolama alanı)
