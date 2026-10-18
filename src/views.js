@@ -1,5 +1,5 @@
 const { html, raw } = require('./html');
-const { modelCode } = require('./db');
+const { modelCode, TEST_KONULARI } = require('./db');
 const { formatTR } = require('./time');
 const { formatAvg } = require('./results');
 
@@ -73,7 +73,7 @@ function modelsPage({ user, models, q }) {
       <a class="add-tile" href="/modeller/yeni"><b>+</b><span>Yeni model</span></a>
       ${models.map((m) => html`
         <a class="tile" href="/modeller/${m.id}">
-          <div class="tile-img">${thumb(m.image)}<span class="no">${modelCode(m.id)}</span>${m.image_count > 1 ? html`<span class="count">${m.image_count} görsel</span>` : ''}</div>
+          <div class="tile-img">${thumb(m.image)}<span class="no">${modelCode(m.id)}</span>${m.ab_test && m.image_count > 1 ? html`<span class="ab">A/B · ${m.image_count} seçenek</span>` : m.image_count > 1 ? html`<span class="count">${m.image_count} görsel</span>` : ''}</div>
           <b>${m.ana_kumas}</b><span>${m.icerik}</span>
         </a>`)}
     </div>
@@ -97,20 +97,30 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs }
     <div class="head"><div><h1>${isNew ? 'Yeni model' : modelCode(model.id)}</h1>
       <p class="sub">${isNew ? html`Kaydedince <b>${nextCode}</b> numarası verilecek.` : `Eklenme: ${formatTR(model.created_at.replace(' ', 'T') + 'Z')}`}</p></div></div>
     ${errors(errs)}
+    <form class="stack" method="post" enctype="multipart/form-data" action="${isNew ? '/modeller' : `/modeller/${model.id}`}">
     ${!isNew && images.length ? html`<div class="card"><div class="label">Görseller</div><div class="img-grid">
-      ${images.map((im) => html`<div class="img-cell">${thumb(im.filename)}
-        <form method="post" action="/modeller/${model.id}/gorsel/${im.id}/sil"><button class="x" title="Görseli kaldır" aria-label="Görseli kaldır">×</button></form></div>`)}
+      ${images.map((im) => html`<div class="img-cell">${thumb(im.filename)}<span class="no">${im.letter}</span>
+        <button class="x" formaction="/modeller/${model.id}/gorsel/${im.id}/sil" formnovalidate title="Görseli kaldır" aria-label="${im.letter} görselini kaldır">×</button>
+        <input class="vlabel" name="label_${im.id}" maxlength="80" placeholder="Seçenek adı, ör. Lacivert-beyaz" value="${im.label || ''}" aria-label="${im.letter} seçeneğinin adı"></div>`)}
     </div></div>` : ''}
-    <form class="card stack" method="post" enctype="multipart/form-data" action="${isNew ? '/modeller' : `/modeller/${model.id}`}">
+    <div class="card stack">
       <label class="drop" for="images">
         <input id="images" name="images" type="file" accept="image/*" multiple ${isNew ? 'required' : ''}>
         <b>${isNew ? 'Görsel ekle' : 'Görsel ekle (isteğe bağlı)'}</b><span>Birden fazla seçebilir, telefonda fotoğraf çekebilirsiniz.</span>
-        <div class="preview" id="preview"></div>
       </label>
+      <div class="preview" id="preview"></div>
+      <fieldset class="abbox">
+        <label class="switch"><input type="checkbox" id="ab_test" name="ab_test" value="1" ${v.ab_test ? 'checked' : ''}>
+          <span><b>A/B testi: görseller bu modelin alternatifleri</b><small>Renk, jakar deseni, çizgi yerleşimi, doku, ekose renkleri gibi seçenekleri karşılaştırın. Katılımcı her seçeneği ayrı puanlar ve koleksiyona hangisinin girmesini istediğini seçer. Kapalıysa görseller aynı ürünün farklı açıları sayılır.</small></span></label>
+        <label class="field ab-only"><span>Neyi karşılaştırıyorsunuz?</span>
+          <select id="test_konusu" name="test_konusu"><option value="">Seçin</option>
+            ${TEST_KONULARI.map((k) => html`<option ${v.test_konusu === k ? 'selected' : ''}>${k}</option>`)}</select></label>
+      </fieldset>
       <label class="field"><span>Ana kumaş</span><input id="ana_kumas" name="ana_kumas" required maxlength="120" placeholder="ör. Viskon krep" value="${v.ana_kumas || ''}"></label>
       <label class="field"><span>İçerik</span><input id="icerik" name="icerik" required maxlength="200" placeholder="ör. %100 Viskon" value="${v.icerik || ''}"></label>
       ${soonFields(v)}
       <button class="btn">${isNew ? 'Modeli kaydet' : 'Değişiklikleri kaydet'}</button>
+    </div>
     </form>
     <script src="/static/onizleme.js"></script>`,
   });
@@ -203,15 +213,23 @@ function surveyDetailPage({ user, results, invitations, smtpReady, flash }) {
     <h2>Sonuçlar ${isClosed ? '' : html`<span class="sub">· anlık</span>`}</h2>
     <p class="sub">Ortalama yalnızca 1–5 puanlardan hesaplanır. “Tarzım değil” yanıtları ortalamaya katılmaz.</p>
     <div class="list">
-      ${models.map((m, i) => html`<div class="card result">
+      ${models.map((m, i) => html`<div class="card result ${m.ab ? 'abr' : ''}">
         <div class="rank">${i + 1}</div>
         ${thumb(m.image, 'sm')}
         <div class="result-main">
           <div><b>${m.code}</b> <span class="sub">· ${m.ana_kumas} · ${m.icerik}</span></div>
           <div class="meter"><i style="width:${m.avg === null ? 0 : Math.round((m.avg / 5) * 100)}%"></i></div>
-          <div class="sub">${m.scored} kişi puan verdi · ${m.notMyStyle} tarzım değil</div>
-          <div class="dist">${m.dist.map((n, k) => html`<span><b>${k + 1}</b>${n}</span>`)}</div>
-          ${m.comments.length ? html`<details><summary>${m.comments.length} yorum</summary>${m.comments.map((c) => html`<p class="comment">“${c.text}” <span class="sub">· ${c.email} · ${c.notMyStyle ? 'Tarzım değil' : `${c.score} puan`}</span></p>`)}</details>` : ''}
+          ${m.ab ? html`<div class="sub"><span class="ab inline">A/B</span> ${m.test_konusu || 'Seçenek karşılaştırması'} · ${m.winner ? html`önde: <b>${m.winner.letter}${m.winner.label ? ` · ${m.winner.label}` : ''}</b>` : 'henüz oy yok'}</div>
+          <div class="variants">${m.variants.map((v) => html`<div class="variant ${m.winner && m.winner.imageId === v.imageId ? 'win' : ''}">
+            <div class="tile-img">${thumb(v.filename)}<span class="no">${v.letter}</span></div>
+            <div class="v-body"><b>${v.label || `Seçenek ${v.letter}`}</b>
+              <div class="v-num"><span><em>${formatAvg(v.avg)}</em> ort.</span><span><em>${v.picks}</em> tercih</span></div>
+              <div class="sub">${v.scored} puan · ${v.notMyStyle} tarzım değil</div>
+              <div class="dist">${v.dist.map((n, k) => html`<span><b>${k + 1}</b>${n}</span>`)}</div></div></div>`)}</div>
+          ${m.noPick ? html`<div class="sub">${m.noPick} kişi hiçbirini seçmedi</div>` : ''}`
+    : html`<div class="sub">${m.scored} kişi puan verdi · ${m.notMyStyle} tarzım değil</div>
+          <div class="dist">${m.dist.map((n, k) => html`<span><b>${k + 1}</b>${n}</span>`)}</div>`}
+          ${m.comments.length ? html`<details><summary>${m.comments.length} yorum</summary>${m.comments.map((c) => html`<p class="comment">“${c.text}” <span class="sub">· ${c.email}${c.note ? ` · ${c.note}` : ''}</span></p>`)}</details>` : ''}
         </div>
         <div class="avg">${formatAvg(m.avg)}</div>
       </div>`)}
@@ -225,6 +243,32 @@ function surveyDetailPage({ user, results, invitations, smtpReady, flash }) {
   });
 }
 
+function rating(name, legend) {
+  return html`<fieldset class="rate"><legend>${legend}</legend>
+    <div class="stars">${[1, 2, 3, 4, 5].map((n) => html`<label><input type="radio" name="${name}" value="${n}" required><span>${n}</span></label>`)}</div>
+    <div class="scale-hint"><span>Hiç beğenmedim</span><span>Çok beğendim</span></div>
+    <label class="nms"><input type="radio" name="${name}" value="nms"><span>Tarzım değil</span></label>
+  </fieldset>`;
+}
+
+// A/B adımı: her seçenek ayrı puanlanır, sonra koleksiyon için bir tercih yapılır.
+function abStep(m) {
+  const name = (im) => im.label || `Seçenek ${im.letter}`;
+  return html`
+    <div class="step-info"><b>${m.code}</b><span>${m.ana_kumas} · ${m.icerik}</span></div>
+    <div class="ab-intro"><span class="ab inline">A/B</span> <b>${m.test_konusu || 'Seçenek karşılaştırması'}</b><br>
+      Bu modelin ${m.images.length} seçeneği var. Her birini puanlayın, sonra koleksiyona hangisinin girmesini istediğinizi seçin.</div>
+    ${m.images.map((im) => html`<div class="variant-rate">
+      <div class="tile-img"><img class="ph wide" src="/uploads/${im.filename}" alt="${m.code} ${im.letter}"><span class="no big">${im.letter}</span></div>
+      ${rating(`r_${m.id}_${im.id}`, `${im.letter} · ${name(im)}`)}
+    </div>`)}
+    <fieldset class="rate pickset"><legend>Koleksiyona hangisi girsin?</legend>
+      <div class="picks">${m.images.map((im) => html`<label><input type="radio" name="p_${m.id}" value="${im.id}" required>
+        <span><img src="/uploads/${im.filename}" alt=""><b>${im.letter}</b><small>${im.label || ''}</small></span></label>`)}
+        <label class="none"><input type="radio" name="p_${m.id}" value="0"><span><b>Hiçbiri</b></span></label></div>
+    </fieldset>`;
+}
+
 function participantPage({ survey, invitation, models }) {
   const total = models.length;
   return layout({
@@ -236,13 +280,10 @@ function participantPage({ survey, invitation, models }) {
       ${models.map((m, i) => html`
       <section class="step card" data-step="${i}">
         <div class="step-no">${i + 1} / ${total}</div>
-        <div class="step-imgs">${m.images.length ? m.images.map((f) => html`<img src="/uploads/${f}" alt="${m.code}">`) : html`<div class="ph ph-empty">Görsel yok</div>`}</div>
+        ${m.ab ? abStep(m) : html`
+        <div class="step-imgs">${m.images.length ? m.images.map((im) => html`<img src="/uploads/${im.filename}" alt="${m.code}">`) : html`<div class="ph ph-empty">Görsel yok</div>`}</div>
         <div class="step-info"><b>${m.code}</b><span>${m.ana_kumas} · ${m.icerik}</span></div>
-        <fieldset class="rate"><legend>Bu modeli ne kadar beğendiniz?</legend>
-          <div class="stars">${[1, 2, 3, 4, 5].map((n) => html`<label><input type="radio" name="r_${m.id}" value="${n}" required><span>${n}</span></label>`)}</div>
-          <div class="scale-hint"><span>Hiç beğenmedim</span><span>Çok beğendim</span></div>
-          <label class="nms"><input type="radio" name="r_${m.id}" value="nms"><span>Tarzım değil</span></label>
-        </fieldset>
+        ${rating(`r_${m.id}`, 'Bu modeli ne kadar beğendiniz?')}`}
         <label class="field"><span>Yorumunuz <em>isteğe bağlı</em></span><textarea name="c_${m.id}" rows="2" maxlength="1000" placeholder="Kalıp, renk, kumaş hakkında bir not…"></textarea></label>
         <div class="step-nav">
           ${i > 0 ? html`<button type="button" class="btn btn-soft" data-go="-1">Geri</button>` : ''}

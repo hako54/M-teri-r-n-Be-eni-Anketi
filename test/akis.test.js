@@ -119,7 +119,7 @@ test('uçtan uca akış: kayıt, model, anket, yanıt, sonuç maili', async () =
   assert.match(r.text, /Anket kapandı/);
 
   r = await req('GET', `/anketler/${surveyId}/sonuclar.csv`);
-  assert.match(r.text, /MDL-0002;Denim;%98 Pamuk %2 Elastan;2,0;1;1;0;1;0;0;0/);
+  assert.match(r.text, /MDL-0002;Denim;%98 Pamuk %2 Elastan;;;;2,0;1;1;0;1;0;0;0;;/);
 
   // İkinci tur aynı sonucu tekrar göndermez.
   await surveys.tick();
@@ -131,4 +131,90 @@ test('giriş yapmadan yönetim sayfaları açılmaz', async () => {
   const r = await req('GET', '/modeller');
   assert.strictEqual(r.status, 302);
   assert.strictEqual(r.location, '/giris');
+});
+
+test('A/B testi: seçenekler ayrı puanlanır, koleksiyon tercihi kazananı belirler', async () => {
+  cookie = '';
+  await req('POST', '/kayit', { username: 'ab-kullanici', email: 'ab@firma.com.tr', password: 'gizli-sifre' });
+
+  let fd = new FormData();
+  fd.append('ana_kumas', 'Ekose flanel');
+  fd.append('icerik', '%100 Pamuk');
+  fd.append('ab_test', '1');
+  fd.append('images', new Blob([PNG], { type: 'image/png' }), 'tek.png');
+  let r = await req('POST', '/modeller', fd);
+  assert.strictEqual(r.status, 400, 'tek görselle A/B testi olmaz');
+  assert.match(r.text, /en az iki görsel/);
+
+  fd = new FormData();
+  fd.append('ana_kumas', 'Ekose flanel');
+  fd.append('icerik', '%100 Pamuk');
+  fd.append('ab_test', '1');
+  fd.append('test_konusu', 'Ekose renkleri');
+  for (const [name, label] of [['a.png', 'Kırmızı-lacivert'], ['b.png', 'Yeşil-bej'], ['c.png', '']]) {
+    fd.append('images', new Blob([PNG], { type: 'image/png' }), name);
+    fd.append('labels', label);
+  }
+  r = await req('POST', '/modeller', fd);
+  assert.strictEqual(r.status, 302, r.text);
+  const modelId = Number(r.location.split('/').pop());
+  const imgs = db.prepare('SELECT * FROM model_images WHERE model_id = ? ORDER BY sort_order').all(modelId);
+  assert.deepStrictEqual(imgs.map((i) => i.label), ['Kırmızı-lacivert', 'Yeşil-bej', null]);
+  const [A, B, C] = imgs.map((i) => i.id);
+
+  r = await req('GET', '/modeller');
+  assert.match(r.text, /A\/B · 3 seçenek/);
+
+  r = await req('POST', '/anketler', { title: 'Ekose testi', models: String(modelId), emails: 'x@f.com, y@f.com, z@f.com', days: '2', hour: '18:00', result_emails: 'ab@firma.com.tr' });
+  const surveyId = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  await surveys.sendInvitations(surveyId);
+  const [x, y, z] = db.prepare('SELECT * FROM invitations WHERE survey_id = ? ORDER BY email').all(surveyId);
+
+  const own = cookie;
+  cookie = '';
+  r = await req('GET', `/a/${x.token}`);
+  assert.match(r.text, /Koleksiyona hangisi girsin/);
+  assert.match(r.text, /Ekose renkleri/);
+  assert.match(r.text, /B · Yeşil-bej/);
+  assert.match(r.text, /C · Seçenek C/);
+
+  const k = (img) => `r_${modelId}_${img}`;
+  const p = `p_${modelId}`;
+  r = await req('POST', `/a/${x.token}`, { [k(A)]: '5', [k(B)]: '3' });
+  assert.strictEqual(r.status, 400, 'eksik seçenek reddedilmeli');
+  r = await req('POST', `/a/${x.token}`, { [k(A)]: '5', [k(B)]: '3', [k(C)]: '2' });
+  assert.strictEqual(r.status, 400, 'tercih yapılmadan gönderilemez');
+  r = await req('POST', `/a/${x.token}`, { [k(A)]: '4', [k(B)]: '5', [k(C)]: 'nms', [p]: String(B), [`c_${modelId}`]: 'Yeşil daha taze' });
+  assert.match(r.text, /Teşekkürler/);
+  r = await req('POST', `/a/${y.token}`, { [k(A)]: '5', [k(B)]: '4', [k(C)]: '1', [p]: String(B) });
+  assert.match(r.text, /Teşekkürler/);
+  r = await req('POST', `/a/${z.token}`, { [k(A)]: '5', [k(B)]: '2', [k(C)]: 'nms', [p]: '0' });
+  assert.match(r.text, /Teşekkürler/);
+  cookie = own;
+
+  const { computeResults } = require('../src/results');
+  const m = computeResults(surveyId).models[0];
+  assert.ok(m.ab);
+  const [vA, vB, vC] = m.variants;
+  assert.strictEqual(vA.avg, 14 / 3);
+  assert.strictEqual(vB.picks, 2);
+  assert.strictEqual(vC.notMyStyle, 2);
+  assert.strictEqual(vC.avg, 1);
+  assert.strictEqual(m.noPick, 1);
+  // A'nın ortalaması daha yüksek olsa da koleksiyon tercihi B'de.
+  assert.strictEqual(m.winner.letter, 'B');
+
+  r = await req('GET', `/anketler/${surveyId}`);
+  assert.match(r.text, /önde: <b>B · Yeşil-bej<\/b>/);
+  assert.match(r.text, /seçimi B/);
+
+  r = await req('GET', `/anketler/${surveyId}/sonuclar.csv`);
+  assert.match(r.text, /Ekose renkleri;B;Yeşil-bej;3,7;3;0;0;1;0;1;1;2;Evet/);
+  assert.match(r.text, /Ekose renkleri;–;Hiçbiri;;;;;;;;;1;/);
+
+  r = await req('POST', `/anketler/${surveyId}/kapat`);
+  const mail = db.prepare("SELECT * FROM outbox WHERE subject = 'Anket sonucu: Ekose testi'").get();
+  assert.match(mail.html, /A\/B/);
+  assert.match(mail.html, /B ✓/);
+  assert.match(mail.html, /1 kişi hiçbirini seçmedi/);
 });

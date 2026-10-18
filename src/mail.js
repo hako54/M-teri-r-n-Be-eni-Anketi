@@ -63,6 +63,23 @@ function inviteEmail({ survey, ownerName, token, models }) {
   return shell(survey.title, card(inner.toString()));
 }
 
+// A/B modeli: seçenekler yan yana, kazanan vurgulu.
+function abBlock(m) {
+  const cells = m.variants.map((v) => {
+    const win = m.winner && m.winner.imageId === v.imageId;
+    return html`<td valign="top" width="${Math.floor(100 / m.variants.length)}%" style="padding:3px">
+      <div style="border:2px solid ${win ? C.accent : '#E3EDF9'};background:${win ? '#F5F9FF' : '#fff'};border-radius:12px;padding:5px">
+        <img src="${imgUrl(v.filename)}" alt="${v.letter}" width="90" style="width:100%;max-width:120px;border-radius:8px;display:block">
+        <div style="font-size:13px;font-weight:800;margin-top:4px">${v.letter}${win ? ' ✓' : ''}</div>
+        ${v.label ? html`<div style="font-size:11px;color:${C.muted}">${v.label}</div>` : ''}
+        <div style="font-size:12px;margin-top:3px"><b>${formatAvg(v.avg)}</b> ort. · <b>${v.picks}</b> tercih</div>
+        <div style="font-size:11px;color:${C.muted}">${v.notMyStyle} tarzım değil</div>
+      </div></td>`;
+  });
+  return html`<div style="font-size:12px;color:${C.muted};margin-bottom:4px"><b style="color:${C.accent}">A/B</b> · ${m.test_konusu || 'Seçenek karşılaştırması'}${m.noPick ? ` · ${m.noPick} kişi hiçbirini seçmedi` : ''}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>`;
+}
+
 function resultEmail(results) {
   const { survey, invited, completed, models } = results;
   const rate = invited ? Math.round((completed / invited) * 100) : 0;
@@ -80,7 +97,7 @@ function resultEmail(results) {
 
   const rows = models.map((m, i) => {
     const pct = m.avg === null ? 0 : Math.round((m.avg / 5) * 100);
-    const comments = m.comments.map((c) => html`<div style="font-size:12px;color:${C.ink};background:#F5F9FF;border-radius:10px;padding:7px 10px;margin-top:5px">“${c.text}” <span style="color:${C.muted}">· ${c.notMyStyle ? 'Tarzım değil' : `${c.score} puan`}</span></div>`);
+    const comments = m.comments.map((c) => html`<div style="font-size:12px;color:${C.ink};background:#F5F9FF;border-radius:10px;padding:7px 10px;margin-top:5px">“${c.text}” <span style="color:${C.muted}">${c.note ? `· ${c.note}` : ''}</span></div>`);
     return html`
       <tr><td style="padding:12px 0;border-bottom:1px solid #EEF3FA">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -90,8 +107,8 @@ function resultEmail(results) {
             <div style="font-size:14px;font-weight:800">${m.code} <span style="font-weight:400;color:${C.muted}">· ${m.ana_kumas}</span></div>
             <div style="font-size:12px;color:${C.muted}">${m.icerik}</div>
             <div style="background:${C.soft};border-radius:4px;height:7px;margin:7px 0 4px"><div style="background:${C.accent};border-radius:4px;height:7px;width:${pct}%"></div></div>
-            <div style="font-size:12px;color:${C.muted}">${m.scored} kişi puan verdi · ${m.notMyStyle} tarzım değil</div>
-            <div style="font-size:12px;color:${C.muted};margin-top:2px">${m.dist.map((n, k) => html`<span style="white-space:nowrap;margin-right:8px"><b style="color:${C.ink}">${k + 1}:</b> ${n}</span>`)}</div>
+            ${m.ab ? abBlock(m) : html`<div style="font-size:12px;color:${C.muted}">${m.scored} kişi puan verdi · ${m.notMyStyle} tarzım değil</div>
+            <div style="font-size:12px;color:${C.muted};margin-top:2px">${m.dist.map((n, k) => html`<span style="white-space:nowrap;margin-right:8px"><b style="color:${C.ink}">${k + 1}:</b> ${n}</span>`)}</div>`}
             ${comments}
           </td>
           <td width="48" valign="top" align="right" style="font-size:20px;font-weight:800">${formatAvg(m.avg)}</td>

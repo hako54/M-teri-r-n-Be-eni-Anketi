@@ -4,7 +4,7 @@ const path = require('node:path');
 const express = require('express');
 const multer = require('multer');
 const config = require('./config');
-const { db, tx, modelCode } = require('./db');
+const { db, tx, modelCode, modelImages, isAbTest, TEST_KONULARI } = require('./db');
 const auth = require('./auth');
 const views = require('./views');
 const { closesAt, formatTR } = require('./time');
@@ -92,28 +92,37 @@ app.get('/modeller', auth.requireUser, (req, res) => {
 
 app.get('/modeller/yeni', auth.requireUser, (req, res) => send(res, views.modelFormPage({ user: req.user, nextCode: nextModelCode() })));
 
+// A/B ayarı: görseller aynı modelin alternatifleriyse (renk, desen, doku…) ayrı ayrı oylanır.
+function abFields(body) {
+  const ab = body.ab_test === '1';
+  const konu = field(body.test_konusu, 60);
+  return { ab_test: ab ? 1 : 0, test_konusu: ab && TEST_KONULARI.includes(konu) ? konu : null };
+}
+
 app.post('/modeller', auth.requireUser, upload.array('images'), (req, res) => {
-  const values = { ana_kumas: field(req.body.ana_kumas, 120), icerik: field(req.body.icerik, 200) };
+  const values = { ana_kumas: field(req.body.ana_kumas, 120), icerik: field(req.body.icerik, 200), ...abFields(req.body) };
+  const labels = [].concat(req.body.labels || []);
   const errs = [];
   if (!req.files || !req.files.length) errs.push('En az bir görsel ekleyin (JPG, PNG, WEBP, HEIC).');
   if (!values.ana_kumas) errs.push('Ana kumaşı yazın.');
   if (!values.icerik) errs.push('İçeriği yazın.');
+  if (values.ab_test && (!req.files || req.files.length < 2)) errs.push('A/B testi için en az iki görsel ekleyin; her görsel bir seçenek olur.');
+  if (values.ab_test && !values.test_konusu) errs.push('A/B testinde neyin karşılaştırıldığını seçin.');
   if (errs.length) {
     removeFiles(req.files);
     return send(res, views.modelFormPage({ user: req.user, nextCode: nextModelCode(), values, errs }), 400);
   }
   const id = tx(() => {
-    const { lastInsertRowid } = db.prepare('INSERT INTO models (user_id, ana_kumas, icerik) VALUES (?, ?, ?)')
-      .run(req.user.id, values.ana_kumas, values.icerik);
-    const addImg = db.prepare('INSERT INTO model_images (model_id, filename, sort_order) VALUES (?, ?, ?)');
-    req.files.forEach((f, i) => addImg.run(lastInsertRowid, f.filename, i));
+    const { lastInsertRowid } = db.prepare('INSERT INTO models (user_id, ana_kumas, icerik, ab_test, test_konusu) VALUES (?, ?, ?, ?, ?)')
+      .run(req.user.id, values.ana_kumas, values.icerik, values.ab_test, values.test_konusu);
+    const addImg = db.prepare('INSERT INTO model_images (model_id, filename, label, sort_order) VALUES (?, ?, ?, ?)');
+    req.files.forEach((f, i) => addImg.run(lastInsertRowid, f.filename, field(labels[i], 80) || null, i));
     return lastInsertRowid;
   });
   res.redirect(`/modeller/${id}`);
 });
 
 const getModel = (id) => db.prepare('SELECT * FROM models WHERE id = ?').get(Number(id) || 0);
-const modelImages = (id) => db.prepare('SELECT * FROM model_images WHERE model_id = ? ORDER BY sort_order, id').all(id);
 
 app.get('/modeller/:id', auth.requireUser, (req, res) => {
   const model = getModel(req.params.id);
@@ -126,15 +135,27 @@ app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) =
   if (!model) { removeFiles(req.files); return res.redirect('/modeller'); }
   const ana = field(req.body.ana_kumas, 120);
   const icerik = field(req.body.icerik, 200);
-  if (!ana || !icerik) {
+  const ab = abFields(req.body);
+  const images = modelImages(model.id);
+  const errs = [];
+  if (!ana || !icerik) errs.push('Ana kumaş ve içerik boş bırakılamaz.');
+  if (ab.ab_test && images.length + (req.files || []).length < 2) errs.push('A/B testi için en az iki görsel gerekli.');
+  if (ab.ab_test && !ab.test_konusu) errs.push('A/B testinde neyin karşılaştırıldığını seçin.');
+  if (errs.length) {
     removeFiles(req.files);
-    return send(res, views.modelFormPage({ user: req.user, model, images: modelImages(model.id), errs: ['Ana kumaş ve içerik boş bırakılamaz.'] }), 400);
+    return send(res, views.modelFormPage({ user: req.user, model: { ...model, ...ab }, images, errs }), 400);
   }
+  const labels = [].concat(req.body.labels || []);
   tx(() => {
-    db.prepare('UPDATE models SET ana_kumas = ?, icerik = ? WHERE id = ?').run(ana, icerik, model.id);
+    db.prepare('UPDATE models SET ana_kumas = ?, icerik = ?, ab_test = ?, test_konusu = ? WHERE id = ?')
+      .run(ana, icerik, ab.ab_test, ab.test_konusu, model.id);
+    const setLabel = db.prepare('UPDATE model_images SET label = ? WHERE id = ?');
+    for (const im of images) {
+      if (`label_${im.id}` in req.body) setLabel.run(field(req.body[`label_${im.id}`], 80) || null, im.id);
+    }
     const start = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM model_images WHERE model_id = ?').get(model.id).n;
-    const addImg = db.prepare('INSERT INTO model_images (model_id, filename, sort_order) VALUES (?, ?, ?)');
-    (req.files || []).forEach((f, i) => addImg.run(model.id, f.filename, start + i));
+    const addImg = db.prepare('INSERT INTO model_images (model_id, filename, label, sort_order) VALUES (?, ?, ?, ?)');
+    (req.files || []).forEach((f, i) => addImg.run(model.id, f.filename, field(labels[i], 80) || null, start + i));
   });
   res.redirect(`/modeller/${model.id}`);
 });
@@ -263,7 +284,10 @@ app.get('/a/:token', (req, res) => {
   if (!invitation) return send(res, views.messagePage({ title: 'Link geçersiz', text: 'Bu anket linki bulunamadı. Maildeki linki eksiksiz açtığınızdan emin olun.' }), 404);
   if (invitation.completed_at) return send(res, views.messagePage({ title: 'Teşekkürler', text: 'Bu anketi tamamladınız. Görüşleriniz kaydedildi.' }));
   if (!isOpen) return send(res, views.messagePage({ title: 'Anket kapandı', text: `Bu anket ${formatTR(survey.closed_at || survey.closes_at)} tarihinde kapandı.` }));
-  const models = surveys.surveyModels(survey.id).map((m) => ({ ...m, images: modelImages(m.id).map((i) => i.filename) }));
+  const models = surveys.surveyModels(survey.id).map((m) => {
+    const images = modelImages(m.id);
+    return { ...m, images, ab: isAbTest(m, images) };
+  });
   send(res, views.participantPage({ survey, invitation, models }));
 });
 
@@ -271,14 +295,32 @@ app.post('/a/:token', (req, res) => {
   const { invitation, survey, isOpen } = loadInvitation(req.params.token);
   if (!invitation) return res.redirect(`/a/${encodeURIComponent(req.params.token)}`);
   if (invitation.completed_at || !isOpen) return res.redirect(`/a/${encodeURIComponent(req.params.token)}`);
-  const models = surveys.surveyModels(survey.id);
   const answers = [];
-  for (const m of models) {
-    const r = String(req.body[`r_${m.id}`] || '');
-    const comment = field(req.body[`c_${m.id}`], 1000);
-    if (r === 'nms') answers.push({ modelId: m.id, score: null, notMyStyle: true, comment });
-    else if (/^[1-5]$/.test(r)) answers.push({ modelId: m.id, score: Number(r), notMyStyle: false, comment });
-    else return send(res, views.messagePage({ title: 'Eksik yanıt', text: `${m.code} için bir puan ya da “Tarzım değil” seçin. Geri dönüp tamamlayabilirsiniz.` }), 400);
+  const missing = (code) => send(res, views.messagePage({ title: 'Eksik yanıt', text: `${code} için bütün seçenekleri değerlendirin. Geri dönüp tamamlayabilirsiniz.` }), 400);
+  const parseRating = (value) => {
+    const r = String(value || '');
+    if (r === 'nms') return { score: null, notMyStyle: true };
+    if (/^[1-5]$/.test(r)) return { score: Number(r), notMyStyle: false };
+    return null;
+  };
+  for (const m of surveys.surveyModels(survey.id)) {
+    const images = modelImages(m.id);
+    const answer = { modelId: m.id, ratings: [], comment: field(req.body[`c_${m.id}`], 1000) };
+    if (isAbTest(m, images)) {
+      for (const im of images) {
+        const rating = parseRating(req.body[`r_${m.id}_${im.id}`]);
+        if (!rating) return missing(m.code);
+        answer.ratings.push({ imageId: im.id, ...rating });
+      }
+      const pick = Number(req.body[`p_${m.id}`]);
+      if (!(pick === 0 || images.some((im) => im.id === pick)) || req.body[`p_${m.id}`] === undefined) return missing(m.code);
+      answer.pick = pick;
+    } else {
+      const rating = parseRating(req.body[`r_${m.id}`]);
+      if (!rating) return missing(m.code);
+      answer.ratings.push({ imageId: 0, ...rating });
+    }
+    answers.push(answer);
   }
   surveys.submitResponses(invitation.id, answers);
   send(res, views.messagePage({ title: 'Teşekkürler', text: `Görüşleriniz kaydedildi. Anket ${formatTR(survey.closes_at)} tarihinde kapanacak.` }));

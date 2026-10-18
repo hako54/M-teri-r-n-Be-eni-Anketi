@@ -64,13 +64,20 @@ async function sendPending(surveyId) {
   }
 }
 
+// answers: [{ modelId, ratings: [{ imageId, score, notMyStyle }], pick (A/B: görsel id, 0 = hiçbiri), comment }]
 function submitResponses(invitationId, answers) {
   tx(() => {
-    const save = db.prepare(`
-      INSERT INTO responses (invitation_id, model_id, score, not_my_style, comment) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT (invitation_id, model_id) DO UPDATE SET score = excluded.score,
-        not_my_style = excluded.not_my_style, comment = excluded.comment`);
-    for (const a of answers) save.run(invitationId, a.modelId, a.score, a.notMyStyle ? 1 : 0, a.comment || null);
+    for (const table of ['responses', 'comments', 'picks']) {
+      db.prepare(`DELETE FROM ${table} WHERE invitation_id = ?`).run(invitationId);
+    }
+    const rate = db.prepare('INSERT INTO responses (invitation_id, model_id, image_id, score, not_my_style) VALUES (?, ?, ?, ?, ?)');
+    const comment = db.prepare('INSERT INTO comments (invitation_id, model_id, text) VALUES (?, ?, ?)');
+    const pick = db.prepare('INSERT INTO picks (invitation_id, model_id, image_id) VALUES (?, ?, ?)');
+    for (const a of answers) {
+      for (const r of a.ratings) rate.run(invitationId, a.modelId, r.imageId, r.score, r.notMyStyle ? 1 : 0);
+      if (a.comment) comment.run(invitationId, a.modelId, a.comment);
+      if (a.pick !== undefined) pick.run(invitationId, a.modelId, a.pick);
+    }
     db.prepare('UPDATE invitations SET completed_at = ? WHERE id = ?').run(new Date().toISOString(), invitationId);
   });
 }

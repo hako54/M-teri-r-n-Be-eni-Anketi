@@ -10,6 +10,7 @@ Model görsellerini yükleyip mail ile beğeni anketi gönderen, süre dolunca s
 - **Anket:** Modeller seçilir, katılımcı mailleri girilir, kaç gün açık kalacağı ve bitiş saati (Türkiye saati) belirlenir. Her katılımcıya kendine özel linkle davet maili gider.
 - **Katılımcı ekranı:** Telefonda modeller tek tek gösterilir. Her model için 1–5 puan **veya "Tarzım değil"** seçilir; isteğe bağlı yorum yazılır.
 - **"Tarzım değil":** Ortalamaya ve puan sayısına katılmaz, ayrı sayılır.
+- **A/B testi:** Bir modelin görselleri aynı ürünün alternatifleriyse (model rengi, jakar deseni, çizgi renkleri ve yerleşimi, kumaş dokusu, ekose renkleri, baskı) model "A/B testi" olarak işaretlenir. Her görsel bir seçenek olur (A, B, C…) ve isteğe bağlı bir ad alır. Katılımcı her seçeneği ayrı puanlar, sonra "Koleksiyona hangisi girsin?" sorusunda birini ya da "Hiçbiri"ni seçer. Sonuçta her seçeneğin ortalaması ve tercih sayısı görünür; en çok tercih edilen seçenek (eşitlikte yüksek ortalama) kazanan olarak işaretlenir.
 - **Otomatik sonuç:** Bitiş günü ve saatinde anket kapanır; sıralama, puan dağılımı ve yorumları içeren sonuç maili gider. Ekinde Excel'de açılan `sonuclar.csv` ve `yorumlar.csv` dosyaları vardır. İstenirse anket "Şimdi kapat" ile erken bitirilebilir.
 
 Tasarım: `tasarim/tasarim-secenekleri.html` içindeki **B · Yumuşak Pastel** yönü.
