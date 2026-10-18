@@ -26,7 +26,7 @@
       var ping = htmlBtn.getAttribute('data-ping');
       var go = function () {
         if (ping) fetch(ping, { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(function () {});
-        if (then) window.location.href = then;
+        if (then) { if (window.openMail) window.openMail(then); else window.location.href = then; }
       };
       copyHtml(source ? source.value : '').then(function () { flash(htmlBtn, 'Rapor kopyalandı, Outlook açılıyor…'); go(); }, go);
       return;

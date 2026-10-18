@@ -44,7 +44,7 @@ npm start          # http://localhost:3000
 npm test           # uçtan uca akış testi
 ```
 
-Uygulama mail göndermez: davet, test ve sonuç mailleri `mailto:` linkleriyle kullanıcının cihazındaki mail uygulamasında (Outlook) hazır açılır ve kullanıcı kendi hesabından gönderir. Outlook'un açılması için cihazda varsayılan mail uygulaması Outlook olmalıdır.
+Uygulama mail göndermez: davet, test ve sonuç mailleri `mailto:` linkleriyle kullanıcının cihazındaki mail uygulamasında (Outlook) hazır açılır ve kullanıcı kendi hesabından gönderir. Telefonda (iPhone/Android) mail linkleri varsayılan mail uygulaması yerine doğrudan Outlook uygulamasında açılır (`ms-outlook://compose`); Outlook kurulu değilse ekranın altında "Varsayılan mail uygulamasıyla aç" seçeneği çıkar. Bilgisayarda bilgisayarın varsayılan mail uygulaması açılır.
 
 ## Ayarlar
 

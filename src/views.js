@@ -16,6 +16,7 @@ function layout({ title, user, body, nav = true, active = '' }) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="/static/style.css">
+<script src="/static/outlook.js" defer></script>
 </head><body>
 ${nav && user ? html`<header class="bar"><div class="bar-in">
   <a class="brand" href="/modeller">Model Beğeni Anketi</a>
@@ -456,7 +457,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     <h2>Ankette ${models.length} model var</h2>
     <div class="pick">${models.map((m) => html`<div class="pick-item">${thumb(m.image)}<span class="no">${m.code}</span>${m.ab ? html`<span class="ab">A/B</span>` : ''}<small>${m.ana_kumas}</small></div>`)}</div>`}
     <script src="/static/kopyala.js"></script>
-    ${autoOpenOutlook && invite ? raw(`<script>setTimeout(function(){var a=document.getElementById('outlook');if(a)window.location.href=a.href;},400);</script>`) : ''}`,
+    ${autoOpenOutlook && invite ? raw(`<script>setTimeout(function(){var a=document.getElementById('outlook');if(!a)return;if(window.openMail)window.openMail(a.getAttribute('href'));else window.location.href=a.href;},400);</script>`) : ''}`,
   });
 }
 
