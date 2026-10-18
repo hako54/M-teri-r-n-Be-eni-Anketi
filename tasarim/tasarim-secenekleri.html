@@ -1,0 +1,342 @@
+<title>Model Beğeni Anketi Tasarımları</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400;500&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: sayfa başında akış şeması, ardından her tasarım yönü için bir bant; bant içinde telefon ekranları ızgarada yan yana dizilir. */
+:root{
+  --bg:#F5F8FC; --surface:#FFFFFF; --fg:#14243B; --muted:#5A6B82; --line:#D9E3F0; --accent:#1F5FBF;
+  --ui:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1622;--surface:#152131;--fg:#E6EEF8;--muted:#9DB0C8;--line:#253549;--accent:#7FB0FF;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E1622;--surface:#152131;--fg:#E6EEF8;--muted:#9DB0C8;--line:#253549;--accent:#7FB0FF;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:15px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 64px;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font-size:clamp(1.7rem,3.5vw,2.4rem);font-weight:700;letter-spacing:-.01em}
+.lead{color:var(--muted);max-width:66ch;margin:10px 0 0}
+.eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:600}
+/* akış */
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:22px;padding:0;list-style:none;counter-reset:s}
+.flow li{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;counter-increment:s;display:flex;flex-direction:column;gap:4px;min-width:0}
+.flow li::before{content:counter(s);font-family:var(--mono);font-size:.8rem;color:var(--accent)}
+.flow b{font-size:.95rem}.flow span{color:var(--muted);font-size:.85rem}
+/* yön bandı */
+.dir{display:flex;flex-direction:column;gap:20px;border-top:1px solid var(--line);padding-top:36px}
+.dir-head{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:baseline;justify-content:space-between}
+.dir-head h2{font-size:1.6rem}
+.tag{font-family:var(--mono);font-size:.8rem;background:var(--accent);color:var(--surface);padding:3px 9px;border-radius:4px;margin-right:10px;vertical-align:3px}
+.dir-head p{margin:6px 0 0;color:var(--muted);max-width:60ch}
+.swatches{display:flex;gap:6px}.swatches i{width:26px;height:26px;border-radius:50%;border:1px solid var(--line)}
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:22px 18px}
+figure{margin:0;display:flex;flex-direction:column;gap:8px;align-items:center;min-width:0}
+figcaption{font-size:.82rem;color:var(--muted);text-align:center}
+.phone{width:100%;max-width:236px;aspect-ratio:9/18.5;border-radius:30px;background:#1A2230;padding:7px;box-shadow:0 10px 30px -14px rgba(20,40,80,.35)}
+.scr{height:100%;border-radius:24px;overflow:hidden;position:relative;display:flex;flex-direction:column;font-size:10.5px;line-height:1.4}
+.sb{display:flex;justify-content:space-between;padding:7px 16px 3px;font-size:9px;font-weight:600;opacity:.75}
+.body{flex:1;padding:6px 12px 12px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.note{font-size:.85rem;color:var(--muted);max-width:70ch;margin:0}
+/* kumaş görselleri (örnek) */
+.fab{border-radius:6px;aspect-ratio:3/4;position:relative;overflow:hidden}
+.f1{background:repeating-linear-gradient(45deg,#3B5C8C 0 2px,#4A6EA3 2px 4px)}
+.f2{background:repeating-linear-gradient(90deg,#F2F6FB 0 6px,#9DB7DE 6px 8px)}
+.f3{background:radial-gradient(circle at 30% 30%,#F4C9C2 0 12%,transparent 13%),radial-gradient(circle at 70% 65%,#BCD3F2 0 12%,transparent 13%),#FBF7F1;background-size:26px 26px}
+.f4{background:linear-gradient(#E9E1D2,#DCD1BD)}
+.f5{background:repeating-linear-gradient(0deg,#1E3354 0 3px,#24406A 3px 5px)}
+.f6{background:conic-gradient(#C9D6EA 25%,#fff 0 50%,#C9D6EA 0 75%,#fff 0);background-size:12px 12px}
+.no{position:absolute;left:5px;top:5px;font-family:var(--mono);font-size:8px;background:rgba(255,255,255,.92);color:#14243B;padding:1px 4px;border-radius:3px}
+
+/* ========== A: Kurumsal Net ========== */
+.A .scr{background:#F6F9FD;color:#13253F;font-family:"IBM Plex Sans",sans-serif}
+.A .top{background:#1F5FBF;color:#fff;padding:9px 12px;font-weight:600;font-size:11.5px;display:flex;justify-content:space-between;align-items:center}
+.A .top small{font-weight:400;opacity:.8;font-size:9px}
+.A .card{background:#fff;border:1px solid #DCE5F2;border-radius:6px;padding:8px}
+.A label{font-size:9px;color:#5C6E88;display:block;margin-bottom:2px;font-weight:500}
+.A .in{border:1px solid #C9D6E8;border-radius:4px;padding:5px 7px;background:#fff;font-size:10px;color:#13253F}
+.A .in.ph{color:#9AA9BE}
+.A .btn{background:#1F5FBF;color:#fff;border-radius:4px;padding:7px;text-align:center;font-weight:600}
+.A .btn.ghost{background:#fff;color:#1F5FBF;border:1px solid #1F5FBF}
+.A .row{display:flex;gap:8px;align-items:center}
+.A .list .item{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #E6EDF6}
+.A .list .fab{width:34px;flex:none}
+.A .mono{font-family:var(--mono);font-size:9px;color:#1F5FBF}
+.A .pill{font-size:8.5px;background:#E4EEFB;color:#1F5FBF;padding:1px 6px;border-radius:9px}
+.A .soon{font-size:8px;color:#8C9BB0;border:1px dashed #C9D6E8;border-radius:4px;padding:4px 6px}
+.A .scale{display:flex;gap:4px}.A .scale span{flex:1;border:1px solid #C9D6E8;border-radius:4px;text-align:center;padding:4px 0;background:#fff}
+.A .scale span.on{background:#1F5FBF;color:#fff;border-color:#1F5FBF}
+.A .bar{height:6px;background:#E4EEFB;border-radius:3px;overflow:hidden}.A .bar i{display:block;height:100%;background:#1F5FBF}
+
+/* ========== B: Yumuşak Pastel ========== */
+.B .scr{background:linear-gradient(#EAF4FF,#FFFFFF 45%);color:#22385A;font-family:"Nunito",sans-serif}
+.B h4{margin:0;font-size:14px;font-weight:800}
+.B .sub{color:#6A80A3;font-size:9.5px}
+.B .card{background:#fff;border-radius:16px;padding:9px;box-shadow:0 4px 14px -8px rgba(60,120,200,.35)}
+.B .in{background:#F1F7FF;border-radius:12px;padding:7px 10px;font-size:10px}
+.B .in.ph{color:#93A7C6}
+.B .btn{background:#4C9AFF;color:#fff;border-radius:999px;padding:8px;text-align:center;font-weight:800}
+.B .grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.B .tile{background:#fff;border-radius:14px;padding:5px;box-shadow:0 4px 12px -8px rgba(60,120,200,.4)}
+.B .tile b{display:block;font-size:9.5px;margin-top:3px}.B .tile span{font-size:8.5px;color:#6A80A3}
+.B .add{border:2px dashed #A9CCFF;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#4C9AFF;font-weight:800;font-size:18px;aspect-ratio:3/4.6}
+.B .chip{display:inline-block;background:#DDEBFF;color:#2F6FD0;border-radius:999px;padding:2px 8px;font-size:9px;font-weight:700;margin:0 3px 3px 0}
+.B .stepper{display:flex;align-items:center;justify-content:space-between;background:#F1F7FF;border-radius:12px;padding:5px 10px}
+.B .stepper b{font-size:16px}
+.B .stepper i{font-style:normal;width:20px;height:20px;border-radius:50%;background:#fff;display:inline-flex;align-items:center;justify-content:center;color:#4C9AFF;font-weight:800}
+.B .vote{display:flex;gap:6px}.B .vote span{flex:1;border-radius:12px;padding:7px 0;text-align:center;font-weight:800;background:#F1F7FF;color:#4C7BC0}
+.B .vote span.on{background:#4C9AFF;color:#fff}
+.B .dots{display:flex;gap:3px;justify-content:center}.B .dots i{width:5px;height:5px;border-radius:50%;background:#C9DDFA}.B .dots i.on{background:#4C9AFF;width:14px;border-radius:3px}
+.B .ring{width:58px;height:58px;border-radius:50%;background:conic-gradient(#4C9AFF 0 72%,#DDEBFF 0);display:flex;align-items:center;justify-content:center}
+.B .ring b{background:#fff;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px}
+
+/* ========== C: Katalog / Lookbook ========== */
+.C .scr{background:#FFFFFF;color:#16233A;font-family:"Jost",sans-serif;font-weight:400}
+.C .serif{font-family:"Cormorant Garamond",serif;font-weight:600}
+.C h4{margin:0;font-family:"Cormorant Garamond",serif;font-weight:600;font-size:19px;line-height:1.1}
+.C .cap{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#5873A0}
+.C .hr{height:1px;background:#E1E7F0}
+.C .in{border-bottom:1px solid #B9C7DB;padding:5px 0;font-size:10px}
+.C .in.ph{color:#9FAEC4}
+.C .btn{background:#1B3A6B;color:#fff;padding:8px;text-align:center;font-size:9px;letter-spacing:.18em;text-transform:uppercase}
+.C .btn.line{background:transparent;color:#1B3A6B;border:1px solid #1B3A6B}
+.C .mono{font-family:var(--mono);font-size:8.5px;color:#5873A0}
+.C .look{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.C .look .fab{border-radius:0}
+.C .big .fab{border-radius:0;aspect-ratio:4/4.4}
+.C .swipe{display:flex;justify-content:space-between;align-items:center}
+.C .circ{width:34px;height:34px;border-radius:50%;border:1px solid #1B3A6B;display:flex;align-items:center;justify-content:center;font-size:9px;letter-spacing:.06em}
+.C .circ.fill{background:#1B3A6B;color:#fff}
+.C .rank{display:flex;gap:7px;align-items:center;padding:5px 0;border-bottom:1px solid #EEF2F7}
+.C .rank .fab{width:30px;flex:none;border-radius:0}
+.C .rank b{font-family:"Cormorant Garamond",serif;font-size:15px;width:14px}
+
+.mail .from{display:flex;gap:6px;align-items:center}
+.mail .av{width:20px;height:20px;border-radius:50%;flex:none}
+@media (prefers-reduced-motion:no-preference){.phone{transition:transform .2s}.phone:hover{transform:translateY(-3px)}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Ön taslak · Tasarım seçimi</div>
+    <h1>Model Beğeni Anketi</h1>
+    <p class="lead">Aynı uygulama, üç farklı görünüm. Her bantta aynı beş ekran var: giriş, model ekleme, anket oluşturma, katılımcının telefonda gördüğü anket ve süre bitince gelen sonuç maili. Görseller örnek kumaş desenleridir; gerçek uygulamada yüklediğiniz fotoğraflar görünür.</p>
+    <ol class="flow">
+      <li><b>Tek seferlik kayıt</b><span>Kullanıcı adı ve şifre bir kez oluşturulur.</span></li>
+      <li><b>Model ekleme</b><span>Sınırsız görsel; her yeni model otomatik numara alır (MDL-0001, MDL-0002…).</span></li>
+      <li><b>Kumaş ve içerik</b><span>Ana kumaş ve içerik elle yazılır. Buyer Grup ve Klasman alanları sonra eklenecek.</span></li>
+      <li><b>Anket oluşturma</b><span>Modeller seçilir, mail adresleri girilir, açık kalacağı gün ve bitiş saati belirlenir.</span></li>
+      <li><b>Otomatik davet</b><span>Her kişiye kendi linkiyle mail gider; link telefonda açılır.</span></li>
+      <li><b>Otomatik sonuç</b><span>Bitiş günü ve saatinde anket kapanır, sonuç raporu mail ile gelir.</span></li>
+    </ol>
+  </header>
+
+  <!-- ===================== A ===================== -->
+  <section class="dir A">
+    <div class="dir-head">
+      <div>
+        <h2><span class="tag">A</span>Kurumsal Net</h2>
+        <p>Beyaz zemin, koyu mavi üst bar, liste düzeni. Çok sayıda modeli hızlı taramak ve masaüstünde de rahat çalışmak için. Anket puanlaması 1–5 arası.</p>
+      </div>
+      <div class="swatches" aria-label="Renkler"><i style="background:#1F5FBF"></i><i style="background:#E4EEFB"></i><i style="background:#F6F9FD"></i><i style="background:#13253F"></i></div>
+    </div>
+    <div class="screens">
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="top"><span>Model Beğeni Anketi</span></div>
+        <div class="body" style="justify-content:center;gap:10px">
+          <div style="font-size:14px;font-weight:700">Hesap oluştur</div>
+          <div style="color:#5C6E88;font-size:9.5px">Bir kez oluşturun, sonra bu bilgilerle girin.</div>
+          <div><label>Kullanıcı adı</label><div class="in">ayse.yilmaz</div></div>
+          <div><label>E-posta</label><div class="in">ayse@firma.com.tr</div></div>
+          <div><label>Şifre</label><div class="in">••••••••••</div></div>
+          <div class="btn">Hesabı oluştur</div>
+          <div style="text-align:center;font-size:9px;color:#1F5FBF">Hesabım var, giriş yap</div>
+        </div></div></div><figcaption>1 · Kayıt / giriş</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="top"><span>Modeller</span><small>24 model</small></div>
+        <div class="body">
+          <div class="card">
+            <div class="row" style="justify-content:space-between"><b>Yeni model</b><span class="mono">MDL-0025</span></div>
+            <div class="row" style="margin-top:6px"><div class="fab f3" style="width:40px"></div><div class="fab f3" style="width:40px;opacity:.7"></div><div class="in ph" style="flex:1;text-align:center;padding:14px 0">+ Görsel</div></div>
+            <div style="margin-top:6px"><label>Ana kumaş</label><div class="in">Viskon krep</div></div>
+            <div style="margin-top:5px"><label>İçerik</label><div class="in">%100 Viskon</div></div>
+            <div class="row" style="margin-top:5px"><div class="soon" style="flex:1">Buyer Grup · yakında</div><div class="soon" style="flex:1">Klasman · yakında</div></div>
+            <div class="btn" style="margin-top:7px">Kaydet</div>
+          </div>
+          <div class="list">
+            <div class="item"><div class="fab f1"></div><div style="flex:1"><div class="mono">MDL-0024</div><div>Denim, %98 Pamuk %2 Elastan</div></div></div>
+            <div class="item"><div class="fab f2"></div><div style="flex:1"><div class="mono">MDL-0023</div><div>Çizgili poplin, %100 Pamuk</div></div></div>
+          </div>
+        </div></div></div><figcaption>2 · Model ekleme, otomatik numara</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="top"><span>Yeni anket</span><small>Adım 2/2</small></div>
+        <div class="body">
+          <div><label>Anket adı</label><div class="in">Yaz 2027 · Elbise seçkisi</div></div>
+          <div><label>Seçilen modeller</label><div class="row"><span class="pill">MDL-0018</span><span class="pill">MDL-0021</span><span class="pill">MDL-0024</span><span class="pill">+5</span></div></div>
+          <div><label>Katılımcı e-postaları</label><div class="in" style="line-height:1.6">mehmet@firma.com.tr<br>selin@magaza.com<br>buyer.ekip@firma.com.tr</div></div>
+          <div class="row"><div style="flex:1"><label>Açık kalma</label><div class="in">5 gün</div></div><div style="flex:1"><label>Bitiş saati</label><div class="in">18:00</div></div></div>
+          <div class="card" style="font-size:9.5px;color:#5C6E88">23 Ekim 2026, 18:00'de kapanır. Sonuç <b style="color:#13253F">ayse@firma.com.tr</b> adresine gönderilir.</div>
+          <div class="btn">Anketi başlat ve mailleri gönder</div>
+        </div></div></div><figcaption>3 · Anket oluşturma</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="top"><span>Yaz 2027 · Elbise</span><small>3 / 8</small></div>
+        <div class="body">
+          <div class="fab f3" style="aspect-ratio:4/4.3"><span class="no">MDL-0021</span></div>
+          <div><b>Viskon krep</b> · <span style="color:#5C6E88">%100 Viskon</span></div>
+          <div><label>Bu modeli ne kadar beğendiniz?</label>
+          <div class="scale"><span>1</span><span>2</span><span>3</span><span class="on">4</span><span>5</span></div></div>
+          <div class="in ph">Yorumunuz (isteğe bağlı)</div>
+          <div class="row"><div class="btn ghost" style="flex:1">Geri</div><div class="btn" style="flex:1">Sonraki</div></div>
+        </div></div></div><figcaption>4 · Katılımcı anketi (telefon)</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr mail"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="from"><div class="av" style="background:#1F5FBF"></div><div><b>Anket Sistemi</b><div style="font-size:8.5px;color:#5C6E88">bugün 18:00</div></div></div>
+          <b style="font-size:12px">Sonuç: Yaz 2027 · Elbise seçkisi</b>
+          <div class="card" style="font-size:9.5px">14 davet · <b>11 yanıt</b> · %79 katılım</div>
+          <div class="card" style="display:flex;flex-direction:column;gap:6px">
+            <div><div class="row" style="justify-content:space-between"><span class="mono">MDL-0021</span><b>4,6</b></div><div class="bar"><i style="width:92%"></i></div></div>
+            <div><div class="row" style="justify-content:space-between"><span class="mono">MDL-0024</span><b>4,1</b></div><div class="bar"><i style="width:82%"></i></div></div>
+            <div><div class="row" style="justify-content:space-between"><span class="mono">MDL-0018</span><b>3,2</b></div><div class="bar"><i style="width:64%"></i></div></div>
+            <div><div class="row" style="justify-content:space-between"><span class="mono">MDL-0019</span><b>2,4</b></div><div class="bar"><i style="width:48%"></i></div></div>
+          </div>
+          <div class="btn ghost">Detaylı raporu aç (Excel)</div>
+        </div></div></div><figcaption>5 · Otomatik sonuç maili</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ===================== B ===================== -->
+  <section class="dir B">
+    <div class="dir-head">
+      <div>
+        <h2><span class="tag">B</span>Yumuşak Pastel</h2>
+        <p>Açık gökyüzü mavisi geçişler, yuvarlak kartlar, görsel ağırlıklı ızgara. Mobilde samimi ve kolay; anket “Beğendim / Kararsızım / Beğenmedim” şeklinde tek dokunuşla.</p>
+      </div>
+      <div class="swatches" aria-label="Renkler"><i style="background:#4C9AFF"></i><i style="background:#DDEBFF"></i><i style="background:#EAF4FF"></i><i style="background:#22385A"></i></div>
+    </div>
+    <div class="screens">
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body" style="justify-content:center;gap:10px">
+          <div class="grid2" style="width:70%;margin:0 auto"><div class="fab f2" style="border-radius:12px"></div><div class="fab f3" style="border-radius:12px;margin-top:12px"></div></div>
+          <h4 style="text-align:center">Hoş geldiniz</h4>
+          <div class="sub" style="text-align:center">Hesabınızı bir kez oluşturun</div>
+          <div class="in">ayse.yilmaz</div>
+          <div class="in">ayse@firma.com.tr</div>
+          <div class="in">••••••••••</div>
+          <div class="btn">Başlayalım</div>
+        </div></div></div><figcaption>1 · Kayıt / giriş</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div><h4>Modellerim</h4><div class="sub">24 model · son eklenen MDL-0024</div></div>
+          <div class="grid2">
+            <div class="add">+</div>
+            <div class="tile"><div class="fab f1" style="border-radius:10px"><span class="no">0024</span></div><b>Denim</b><span>%98 Pamuk</span></div>
+            <div class="tile"><div class="fab f2" style="border-radius:10px"><span class="no">0023</span></div><b>Poplin</b><span>%100 Pamuk</span></div>
+            <div class="tile"><div class="fab f4" style="border-radius:10px"><span class="no">0022</span></div><b>Keten</b><span>%55 Keten</span></div>
+          </div>
+        </div></div></div><figcaption>2 · Model galerisi, “+” ile ekleme</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <h4>Anket oluştur</h4>
+          <div class="card"><div class="sub">Modeller</div><span class="chip">MDL-0018</span><span class="chip">MDL-0021</span><span class="chip">MDL-0024</span><span class="chip">+5</span></div>
+          <div class="card"><div class="sub">Kime gönderilsin?</div><span class="chip">mehmet@firma.com.tr</span><span class="chip">selin@magaza.com</span><div class="in ph" style="margin-top:4px">E-posta ekle…</div></div>
+          <div class="card"><div class="sub">Kaç gün açık kalsın?</div><div class="stepper"><i>−</i><b>5 gün</b><i>+</i></div><div class="sub" style="margin-top:5px">Kapanış: 23 Ekim, 18:00</div></div>
+          <div class="btn">Gönder</div>
+        </div></div></div><figcaption>3 · Anket oluşturma</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="dots"><i></i><i></i><i class="on"></i><i></i><i></i><i></i></div>
+          <div class="card" style="padding:6px"><div class="fab f3" style="border-radius:12px;aspect-ratio:4/4.6"><span class="no">MDL-0021</span></div>
+          <div style="padding:5px 3px 0"><b>Viskon krep</b><div class="sub">%100 Viskon</div></div></div>
+          <div class="vote"><span>Beğenmedim</span><span>Kararsızım</span><span class="on">Beğendim</span></div>
+          <div class="in ph">Bir not bırakın…</div>
+        </div></div></div><figcaption>4 · Katılımcı anketi (telefon)</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr mail"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="from"><div class="av" style="background:#4C9AFF"></div><div><b>Anket Sistemi</b><div class="sub">bugün 18:00</div></div></div>
+          <h4 style="font-size:12.5px">Anketiniz tamamlandı</h4>
+          <div class="card" style="display:flex;gap:10px;align-items:center"><div class="ring"><b>%79</b></div><div><b>11 / 14</b><div class="sub">kişi yanıtladı</div></div></div>
+          <div class="card"><div class="sub">En çok beğenilen</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px"><div class="fab f3" style="width:40px;border-radius:8px"></div><div><b>MDL-0021</b><div class="sub">9 beğendim · 2 kararsız</div></div></div>
+          </div>
+          <div class="btn">Tüm sonuçları gör</div>
+        </div></div></div><figcaption>5 · Otomatik sonuç maili</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ===================== C ===================== -->
+  <section class="dir C">
+    <div class="dir-head">
+      <div>
+        <h2><span class="tag">C</span>Katalog / Lookbook</h2>
+        <p>Bembeyaz zemin, lacivert ince çizgiler, moda kataloğu gibi büyük görseller ve zarif başlıklar. Anket kart kaydırma mantığında: “Geç” ya da “Beğen”, sonuçta sıralama.</p>
+      </div>
+      <div class="swatches" aria-label="Renkler"><i style="background:#1B3A6B"></i><i style="background:#5873A0"></i><i style="background:#E1E7F0"></i><i style="background:#FFFFFF"></i></div>
+    </div>
+    <div class="screens">
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body" style="gap:10px">
+          <div class="look" style="margin:0 -12px"><div class="fab f4"></div><div class="fab f2"></div><div class="fab f5"></div></div>
+          <div class="cap">Model Beğeni Anketi</div>
+          <h4>Koleksiyonunuzu<br>sorun, dinleyin.</h4>
+          <div class="in">ayse.yilmaz</div>
+          <div class="in">••••••••••</div>
+          <div class="btn">Hesap oluştur</div>
+          <div class="btn line">Giriş yap</div>
+        </div></div></div><figcaption>1 · Kayıt / giriş</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="cap">Yeni model</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><h4>MDL-0025</h4><span class="mono">otomatik</span></div>
+          <div class="look"><div class="fab f6"></div><div class="fab f6" style="filter:hue-rotate(20deg)"></div><div class="fab" style="border:1px dashed #B9C7DB;display:flex;align-items:center;justify-content:center;color:#5873A0;font-size:14px">+</div></div>
+          <div><div class="cap">Ana kumaş</div><div class="in">Kazayağı jakar</div></div>
+          <div><div class="cap">İçerik</div><div class="in">%65 Polyester %35 Viskon</div></div>
+          <div style="display:flex;gap:10px"><div style="flex:1"><div class="cap">Buyer Grup</div><div class="in ph">yakında</div></div><div style="flex:1"><div class="cap">Klasman</div><div class="in ph">yakında</div></div></div>
+          <div class="btn">Kaydet</div>
+        </div></div></div><figcaption>2 · Model ekleme, otomatik numara</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="cap">Yeni anket</div>
+          <h4>Yaz 2027 · Elbise</h4>
+          <div class="look"><div class="fab f3"><span class="no">0021</span></div><div class="fab f1"><span class="no">0024</span></div><div class="fab f5"><span class="no">0018</span></div></div>
+          <div class="hr"></div>
+          <div><div class="cap">Katılımcılar · 14</div><div class="in" style="line-height:1.6">mehmet@firma.com.tr, selin@magaza.com, buyer.ekip@firma.com.tr …</div></div>
+          <div style="display:flex;gap:10px"><div style="flex:1"><div class="cap">Süre</div><div class="in">5 gün</div></div><div style="flex:1"><div class="cap">Kapanış</div><div class="in">23.10 · 18:00</div></div></div>
+          <div class="btn">Davetleri gönder</div>
+        </div></div></div><figcaption>3 · Anket oluşturma</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div style="display:flex;justify-content:space-between"><span class="cap">Yaz 2027 · Elbise</span><span class="mono">3 / 8</span></div>
+          <div class="big" style="margin:0 -12px"><div class="fab f3"></div></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><h4>MDL-0021</h4><span class="mono">%100 Viskon</span></div>
+          <div style="color:#5873A0">Viskon krep</div>
+          <div class="swipe"><div class="circ">GEÇ</div><span class="cap">kaydırın</span><div class="circ fill">BEĞEN</div></div>
+        </div></div></div><figcaption>4 · Katılımcı anketi (telefon)</figcaption></figure>
+
+      <figure><div class="phone"><div class="scr mail"><div class="sb"><span>09:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="from"><div class="av" style="background:#1B3A6B"></div><div><b>Anket Sistemi</b><div class="mono">bugün 18:00</div></div></div>
+          <div class="cap">Sonuç raporu</div>
+          <h4>Yaz 2027 · Elbise</h4>
+          <div class="mono">11 / 14 yanıt · %79 katılım</div>
+          <div>
+            <div class="rank"><b>1</b><div class="fab f3"></div><div style="flex:1">MDL-0021<div class="mono">%82 beğeni</div></div></div>
+            <div class="rank"><b>2</b><div class="fab f1"></div><div style="flex:1">MDL-0024<div class="mono">%73 beğeni</div></div></div>
+            <div class="rank"><b>3</b><div class="fab f5"></div><div style="flex:1">MDL-0018<div class="mono">%55 beğeni</div></div></div>
+          </div>
+          <div class="btn line">Raporun tamamı</div>
+        </div></div></div><figcaption>5 · Otomatik sonuç maili</figcaption></figure>
+    </div>
+  </section>
+
+  <p class="note">Karışık seçim de yapılabilir: örneğin B'nin görünümü ile A'nın 1–5 puanlaması ya da C'nin kaydırmalı anketi. Seçtiğiniz yön ve anket tipiyle çalışan ön taslağı kuracağım.</p>
+</div>
