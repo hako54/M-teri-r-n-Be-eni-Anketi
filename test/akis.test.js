@@ -313,6 +313,17 @@ test('hesap: kullanıcı adı = şirket e-postasının @ öncesi; şifre sıfır
   // Yönetim yalnızca admin
   r = await c('GET', '/yonetim');
   assert.strictEqual(r.status, 403);
+  r = await client()('POST', '/yonetici', { username: 'selin.kaya', password: 'gizli-sifre' });
+  assert.match(r.text, /yönetici yetkisi yok/);
+  assert.strictEqual(r.status, 403, 'admin olmayan yönetici girişinden giremez');
+  r = await client()('GET', '/yonetim');
+  assert.strictEqual(r.location, '/yonetici');
+  r = await client()('GET', '/yonetici');
+  assert.match(r.text, /Yönetici girişi/);
+  r = await client()('POST', '/yonetici', { username: 'ayse', password: 'gizli-sifre' });
+  assert.strictEqual(r.location, '/yonetim');
+  r = await client()('GET', '/giris');
+  assert.match(r.text, /href="\/yonetici"/);
 
   // Şifremi unuttum -> admin link oluşturur -> kullanıcı yeni şifre belirler, eski oturum kapanır
   r = await client()('POST', '/sifremi-unuttum', { username: 'selin.kaya' });

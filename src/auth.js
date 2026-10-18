@@ -60,9 +60,9 @@ function requireUser(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.user) return res.redirect('/giris');
+  if (!req.user) return res.redirect('/yonetici');
   if (!req.user.is_admin) return res.status(403).type('html').send('Bu sayfa yalnızca admin içindir.');
   next();
 }
 
-module.exports = { hashPassword, verifyPassword, startSession, endSession, loadUser, requireUser, requireAdmin };
+module.exports = { isAdminEmail, hashPassword, verifyPassword, startSession, endSession, loadUser, requireUser, requireAdmin };

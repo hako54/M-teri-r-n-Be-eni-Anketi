@@ -277,3 +277,6 @@ select:disabled { opacity: .55; }
   .bar nav a, .bar a.linkbtn { padding: 6px 9px; font-size: .92rem; }
   .bar a.linkbtn.on { background: var(--chip); color: var(--accent-ink); border-radius: 999px; }
 }
+.admin-badge { align-self: center; background: #0F3A6E; color: #fff; font-weight: 800; letter-spacing: .18em; font-size: .8rem; padding: 8px 18px; border-radius: 999px; margin-bottom: 6px; }
+.auth-admin { background: var(--card); border-radius: var(--r); padding: 26px 20px; box-shadow: var(--shadow); border-top: 6px solid #0F3A6E; }
+.muted-link { color: var(--muted); font-weight: 700; }

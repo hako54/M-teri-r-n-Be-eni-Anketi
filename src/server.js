@@ -82,6 +82,24 @@ app.post('/giris', (req, res) => {
   res.redirect('/modeller');
 });
 
+// Yönetici girişi: aynı hesaplar, ayrı sayfa. Yalnızca admin listesindeki hesaplar girer ve Yönetim'e yönlenir.
+app.get('/yonetici', (req, res) => {
+  if (req.user && req.user.is_admin) return res.redirect('/yonetim');
+  send(res, views.authPage({ mode: 'yonetici' }));
+});
+app.post('/yonetici', (req, res) => {
+  const user = findUser(req.body.username);
+  const values = { username: field(req.body.username, 120) };
+  if (!user || !auth.verifyPassword(String(req.body.password || ''), user.password_hash)) {
+    return send(res, views.authPage({ mode: 'yonetici', values, errs: ['Kullanıcı adı veya şifre hatalı.'] }), 401);
+  }
+  if (!auth.isAdminEmail(user.email)) {
+    return send(res, views.authPage({ mode: 'yonetici', values, errs: ['Bu hesabın yönetici yetkisi yok. Normal giriş sayfasını kullanın.'] }), 403);
+  }
+  auth.startSession(req, res, user.id);
+  res.redirect('/yonetim');
+});
+
 // Şifremi unuttum: sunucu mail göndermediği için istek adminlere iletilir; admin tek kullanımlık link oluşturur.
 app.get('/sifremi-unuttum', (req, res) => send(res, views.forgotPage({})));
 app.post('/sifremi-unuttum', (req, res) => {

@@ -41,23 +41,27 @@ function usernameField(value, autocomplete = 'username', id = 'username', name =
 
 function authPage({ mode, values = {}, errs, needsCode, flash }) {
   const isReg = mode === 'kayit';
+  const isAdmin = mode === 'yonetici';
   return layout({
-    title: isReg ? 'Hesap oluştur' : 'Giriş',
+    title: isReg ? 'Hesap oluştur' : isAdmin ? 'Yönetici girişi' : 'Giriş',
     nav: false,
     body: html`
-    <div class="auth">
-      <div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>
-      <h1>${isReg ? 'Hoş geldiniz' : 'Tekrar hoş geldiniz'}</h1>
-      <p class="sub">${isReg ? 'Hesabınızı bir kez oluşturun, sonra bu bilgilerle girin.' : 'Kullanıcı adınız ve şifrenizle girin.'}</p>
+    <div class="auth ${isAdmin ? 'auth-admin' : ''}">
+      ${isAdmin ? html`<div class="admin-badge" aria-hidden="true">YÖNETİCİ</div>` : html`<div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>`}
+      <h1>${isReg ? 'Hoş geldiniz' : isAdmin ? 'Yönetici girişi' : 'Tekrar hoş geldiniz'}</h1>
+      <p class="sub">${isReg ? 'Hesabınızı bir kez oluşturun, sonra bu bilgilerle girin.' : isAdmin ? 'Kullanıcılar, şifre sıfırlama ve yedekler. Yalnızca yönetici hesapları girebilir.' : 'Kullanıcı adınız ve şifrenizle girin.'}</p>
       ${flash ? html`<div class="ok">${flash}</div>` : ''}
       ${errors(errs)}
       <form method="post" class="stack">
         ${usernameField(values.username)}
         <label class="field"><span>Şifre</span><input id="password" name="password" type="password" required minlength="${isReg ? 8 : 1}" autocomplete="${isReg ? 'new-password' : 'current-password'}">${isReg ? html`<small>En az 8 karakter.</small>` : ''}</label>
         ${isReg && needsCode ? html`<label class="field"><span>Kayıt kodu</span><input id="code" name="code" required value="${values.code || ''}"><small>Şirket yöneticinizden alabilirsiniz.</small></label>` : ''}
-        <button class="btn">${isReg ? 'Başlayalım' : 'Giriş yap'}</button>
+        <button class="btn ${isAdmin ? 'outlook' : ''}">${isReg ? 'Başlayalım' : isAdmin ? 'Yönetici olarak gir' : 'Giriş yap'}</button>
       </form>
-      <p class="center small">${isReg ? html`Hesabınız var mı? <a href="/giris">Giriş yapın</a>` : html`<a href="/sifremi-unuttum">Şifremi unuttum</a> · İlk kez mi geldiniz? <a href="/kayit">Hesap oluşturun</a>`}</p>
+      <p class="center small">${isReg ? html`Hesabınız var mı? <a href="/giris">Giriş yapın</a>`
+    : isAdmin ? html`<a href="/sifremi-unuttum">Şifremi unuttum</a> · <a href="/giris">Kullanıcı girişi</a>`
+      : html`<a href="/sifremi-unuttum">Şifremi unuttum</a> · İlk kez mi geldiniz? <a href="/kayit">Hesap oluşturun</a>`}</p>
+      ${mode === 'giris' ? html`<p class="center small"><a class="muted-link" href="/yonetici">Yönetici girişi</a></p>` : ''}
     </div>`,
   });
 }
