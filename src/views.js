@@ -19,6 +19,7 @@ function layout({ title, user, body, nav = true, active = '' }) {
 <link rel="stylesheet" href="${asset('/static/style.css')}">
 <script src="${asset('/static/outlook.js')}" defer></script>
 <script src="${asset('/static/guncelle.js')}" defer></script>
+<script src="${asset('/static/sil-onay.js')}" defer></script>
 <meta name="app-version" content="${version}">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/ikon-180.png">
@@ -272,7 +273,16 @@ function surveyState(s) {
   return 'acik';
 }
 
-function surveysPage({ user, surveys }) {
+// Anketi siler; onay sorulur (sil-onay.js). Modeller silinmez.
+function deleteSurveyForm(s, compact) {
+  const answers = s.completed ? ` ve ${s.completed} yanıtı` : '';
+  return html`<form method="post" action="/anketler/${s.id}/sil" class="delete-form"
+    data-confirm="“${s.title}” anketi${answers} kalıcı olarak silinsin mi? Modeller silinmez.">
+    <button class="${compact ? 'icon-del' : 'btn btn-sm btn-danger'}" title="Anketi sil" aria-label="${s.title} anketini sil">${compact ? '' : 'Anketi sil'}</button>
+  </form>`;
+}
+
+function surveysPage({ user, surveys, flash }) {
   const status = (s) => ({
     taslak: html`<span class="pill wait">Taslak</span>`,
     acik: html`<span class="pill open">Canlıda</span>`,
@@ -283,11 +293,15 @@ function surveysPage({ user, surveys }) {
     body: html`
     <div class="head"><div><h1>Anketler</h1><p class="sub">${surveys.length} anket</p></div>
       <a class="btn btn-sm" href="/anketler/yeni">+ Yeni anket</a></div>
+    ${flash ? html`<div class="ok">${flash}</div>` : ''}
     <div class="list">
-      ${surveys.map((s) => html`<a class="row card" href="/anketler/${s.id}">
-        <div class="row-main"><b>${s.title}</b><span class="sub">${s.model_count} model · ${s.completed}/${s.invited} yanıt · ${s.published_at ? `kapanış ${formatTR(s.closes_at)}` : `gönderilince ${s.open_days} gün açık kalır`}</span>
-          ${s.published_at ? '' : html`<small class="warn-note">${formatTR(draftExpiresAt(s))} tarihinde silinecek</small>`}</div>
-        ${status(s)}</a>`)}
+      ${surveys.map((s) => html`<div class="row card survey-row">
+        <a class="row-link" href="/anketler/${s.id}">
+          <div class="row-main"><b>${s.title}</b><span class="sub">${s.model_count} model · ${s.completed}/${s.invited} yanıt · ${s.published_at ? `kapanış ${formatTR(s.closes_at)}` : `gönderilince ${s.open_days} gün açık kalır`}</span>
+            ${s.published_at ? '' : html`<small class="warn-note">${formatTR(draftExpiresAt(s))} tarihinde silinecek</small>`}</div>
+          ${status(s)}</a>
+        ${deleteSurveyForm(s, true)}
+      </div>`)}
     </div>
     ${!surveys.length ? html`<p class="empty">Henüz anket yok. Önce modelleri ekleyin, sonra <a href="/anketler/yeni">anket oluşturun</a>.</p>` : ''}`,
   });
@@ -462,6 +476,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     </tbody></table></div>` : html`
     <h2>Ankette ${models.length} model var</h2>
     <div class="pick">${models.map((m) => html`<div class="pick-item">${thumb(m.image)}<span class="no">${m.code}</span>${m.ab ? html`<span class="ab">A/B</span>` : ''}<small>${m.ana_kumas}</small></div>`)}</div>`}
+    <div class="danger-zone">${deleteSurveyForm({ ...survey, completed }, false)}</div>
     <script src="${asset('/static/kopyala.js')}"></script>
     ${autoOpenOutlook && invite ? raw(`<script>setTimeout(function(){var a=document.getElementById('outlook');if(!a)return;if(window.openMail)window.openMail(a.getAttribute('href'));else window.location.href=a.href;},400);</script>`) : ''}`,
   });

@@ -423,3 +423,28 @@ test('güncelleme: sürüm numaralı dosyalar, önbelleksiz sayfalar, ana ekran 
   res = await fetch(`${base}/manifest.webmanifest`);
   assert.strictEqual((await res.json()).short_name, 'Beğeni Anketi');
 });
+
+test('anket silme: yalnızca sahibi siler, yanıtlar gider, modeller kalır', async () => {
+  let r = await admin('POST', '/modeller', (() => { const fd = new FormData(); fd.append('ana_kumas', 'Silinecek'); fd.append('icerik', '%100 Pamuk'); fd.append('images', new Blob([PNG], { type: 'image/png' }), 's.png'); return fd; })());
+  const modelId = modelIdFrom(r);
+  r = await admin('POST', '/anketler', surveyBody({ title: 'Silinecek anket', models: [modelId], emails: 'q@f.com', action: 'gonder' }));
+  const id = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  const { public_token: token } = db.prepare('SELECT public_token FROM surveys WHERE id = ?').get(id);
+  await anon('POST', `/a/${await join(token, 'q@f.com')}`, { [`r_${modelId}`]: '4', [`c_${modelId}`]: 'not' });
+  r = await admin('GET', '/anketler');
+  assert.match(r.text, new RegExp(`action="/anketler/${id}/sil"`));
+  assert.match(r.text, /“Silinecek anket” anketi ve 1 yanıtı kalıcı olarak silinsin mi/);
+
+  const other = client();
+  await other('POST', '/kayit', { username: 'baskasi', password: 'gizli-sifre', code: 'KOD-123' });
+  r = await other('POST', `/anketler/${id}/sil`);
+  assert.ok(db.prepare('SELECT 1 FROM surveys WHERE id = ?').get(id), 'başkasının anketi silinemez');
+
+  r = await admin('POST', `/anketler/${id}/sil`);
+  assert.strictEqual(r.location, '/anketler?m=silindi');
+  assert.strictEqual(db.prepare('SELECT 1 FROM surveys WHERE id = ?').get(id), undefined);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM invitations WHERE survey_id = ?').get(id).n, 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM responses WHERE model_id = ?').get(modelId).n, 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM comments WHERE model_id = ?').get(modelId).n, 0);
+  assert.ok(db.prepare('SELECT 1 FROM models WHERE id = ?').get(modelId), 'model kalır');
+});

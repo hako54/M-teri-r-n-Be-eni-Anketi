@@ -349,7 +349,7 @@ app.get('/anketler', auth.requireUser, (req, res) => {
       (SELECT COUNT(*) FROM invitations i WHERE i.survey_id = s.id AND i.invited = 1) AS invited,
       (SELECT COUNT(*) FROM invitations i WHERE i.survey_id = s.id AND i.completed_at IS NOT NULL) AS completed
     FROM surveys s WHERE s.user_id = ? ORDER BY s.id DESC`).all(req.user.id);
-  send(res, views.surveysPage({ user: req.user, surveys: list }));
+  send(res, views.surveysPage({ user: req.user, surveys: list, flash: req.query.m === 'silindi' ? 'Anket silindi.' : null }));
 });
 
 app.get('/anketler/yeni', auth.requireUser, (req, res) => {
@@ -438,6 +438,13 @@ app.post('/anketler/:id/yayinla', auth.requireUser, (req, res) => {
   if (survey.published_at) return res.redirect(`/anketler/${survey.id}`);
   const closes = surveys.publishSurvey(survey);
   res.redirect(`/anketler/${survey.id}?m=${closes ? 'yayinda' : 'gecmis'}`);
+});
+
+// Anketi siler: davetler, yanıtlar, yorumlar ve tercihler de silinir (veritabanında zincirleme). Modeller kalır.
+app.post('/anketler/:id/sil', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (survey) db.prepare('DELETE FROM surveys WHERE id = ?').run(survey.id);
+  res.redirect(survey ? '/anketler?m=silindi' : '/anketler');
 });
 
 app.post('/anketler/:id/kapat', auth.requireUser, (req, res) => {
