@@ -172,7 +172,15 @@ function thumb(filename, cls = '') {
     : html`<div class="ph ph-empty ${cls}">Görsel yok</div>`;
 }
 
-function modelsPage({ user, models, q, marka, markas = [] }) {
+// Modeli siler; onay sorulur (sil-onay.js).
+function deleteModelForm(m, compact) {
+  return html`<form method="post" action="/modeller/${m.id}/sil" class="delete-form ${compact ? 'tile-del' : ''}"
+    data-confirm="${modelCode(m.id)} · ${m.ana_kumas} modeli ve görselleri kalıcı olarak silinsin mi?">
+    <button class="${compact ? 'icon-del round' : 'btn btn-sm btn-danger'}" title="Modeli sil" aria-label="${modelCode(m.id)} modelini sil">${compact ? '' : 'Modeli sil'}</button>
+  </form>`;
+}
+
+function modelsPage({ user, models, q, marka, markas = [], flash }) {
   const filtered = Boolean(q || marka);
   return layout({
     title: 'Modeller', user, active: 'modeller',
@@ -187,14 +195,19 @@ function modelsPage({ user, models, q, marka, markas = [] }) {
           ${markas.map((mk) => html`<option ${mk === marka ? 'selected' : ''}>${mk}</option>`)}</select>` : ''}
       </form>
     </div>
+    ${flash && flash.ok ? html`<div class="ok">${flash.ok}</div>` : ''}
+    ${flash && flash.err ? html`<div class="alert">${flash.err}</div>` : ''}
     <div class="gallery">
       <a class="add-tile" href="/modeller/yeni"><b>+</b><span>Yeni model</span></a>
-      ${models.map((m) => html`
+      ${models.map((m) => html`<div class="tile-wrap">
         <a class="tile" href="/modeller/${m.id}">
           <div class="tile-img">${thumb(m.image)}<span class="no">${modelCode(m.id)}</span>${m.ab_test && m.image_count > 1 ? html`<span class="ab">A/B · ${m.image_count} seçenek</span>` : m.image_count > 1 ? html`<span class="count">${m.image_count} görsel</span>` : ''}</div>
           <b>${m.ana_kumas}</b><span>${m.icerik}</span>
           ${m.kirilim.length > 1 ? html`<span class="kir">${m.kirilim.slice(1).join(' · ')}</span>` : ''}
-        </a>`)}
+          ${m.survey_count ? html`<span class="in-use">${m.survey_count} ankette</span>` : ''}
+        </a>
+        ${(user.is_admin || m.user_id === user.id) && !m.survey_count ? deleteModelForm(m, true) : ''}
+      </div>`)}
     </div>
     ${!models.length && !filtered ? html`<p class="empty">Henüz model yok. <a href="/modeller/yeni">İlk modeli ekleyin</a>; numarası otomatik verilir.</p>` : ''}
     ${!models.length && filtered ? html`<p class="empty">Bu aramayla eşleşen model yok. <a href="/modeller">Filtreyi temizle</a></p>` : ''}`,
@@ -218,7 +231,7 @@ function kirilimFields(value) {
   <script src="${asset('/static/kirilim.js')}"></script>`;
 }
 
-function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, added, saved }) {
+function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, added, saved, canDelete, surveyCount }) {
   const isNew = !model;
   const v = model || values;
   return layout({
@@ -263,6 +276,9 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, 
       </div>
     </div>
     </form>
+    ${model && canDelete ? html`<div class="danger-zone">${surveyCount
+    ? html`<p class="sub small">Bu model ${surveyCount} ankette kullanıldığı için silinemez. Silmek için önce o anketleri silin.</p>`
+    : deleteModelForm(model, false)}</div>` : ''}
     <script src="${asset('/static/onizleme.js')}"></script>`,
   });
 }

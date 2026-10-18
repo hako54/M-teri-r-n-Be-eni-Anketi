@@ -315,3 +315,9 @@ select:disabled { opacity: .55; }
 .btn-danger { background: var(--err-bg); color: var(--err); }
 .btn-danger:hover { background: #F9D5D5; }
 .danger-zone { display: flex; justify-content: flex-end; margin-top: 18px; }
+.tile-wrap { position: relative; display: flex; min-width: 0; }
+.tile-wrap .tile { flex: 1; }
+.tile-del { position: absolute; top: 14px; right: 14px; }
+.icon-del.round { width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, .94); box-shadow: var(--shadow); }
+.icon-del.round::before { width: 15px; height: 17px; }
+.tile .in-use { margin: 2px 4px 0; font-size: .74rem; font-weight: 700; color: var(--muted); }

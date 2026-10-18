@@ -461,3 +461,51 @@ test('anket silme: yalnızca sahibi siler, yanıtlar gider, modeller kalır', as
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM comments WHERE model_id = ?').get(modelId).n, 0);
   assert.ok(db.prepare('SELECT 1 FROM models WHERE id = ?').get(modelId), 'model kalır');
 });
+
+test('model silme: ekleyen ya da admin siler, ankette kullanılan silinmez', async () => {
+  const newModel = async (req, name) => {
+    const fd = new FormData();
+    fd.append('ana_kumas', name); fd.append('icerik', '%100 Pamuk');
+    fd.append('images', new Blob([PNG], { type: 'image/png' }), 'm.png');
+    return modelIdFrom(await req('POST', '/modeller', fd));
+  };
+  const owner = client();
+  await owner('POST', '/kayit', { username: 'model.sahibi', password: 'gizli-sifre', code: 'KOD-123' });
+  const other = client();
+  await other('POST', '/kayit', { username: 'baska.kullanici', password: 'gizli-sifre', code: 'KOD-123' });
+
+  const free = await newModel(owner, 'Serbest model');
+  const used = await newModel(owner, 'Ankette kullanılan');
+  const adminsTarget = await newModel(owner, 'Admin silecek');
+  const file = db.prepare('SELECT filename FROM model_images WHERE model_id = ?').get(free).filename;
+  await owner('POST', '/anketler', surveyBody({ title: 'Model kullanan anket', models: [used], emails: 'x@f.com', action: 'taslak' }));
+
+  let r = await owner('GET', '/modeller');
+  assert.match(r.text, new RegExp(`action="/modeller/${free}/sil"`), 'sahibine silme düğmesi görünür');
+  assert.doesNotMatch(r.text, new RegExp(`action="/modeller/${used}/sil"`), 'ankette kullanılan modelde düğme yok');
+  assert.match(r.text, /1 ankette/);
+  r = await other('GET', '/modeller');
+  assert.doesNotMatch(r.text, new RegExp(`action="/modeller/${free}/sil"`), 'başkasına düğme görünmez');
+
+  r = await other('POST', `/modeller/${free}/sil`);
+  assert.strictEqual(r.location, '/modeller?m=yetki');
+  r = await owner('POST', `/modeller/${used}/sil`);
+  assert.match(r.location, /m=kullaniliyor/);
+  assert.ok(db.prepare('SELECT 1 FROM models WHERE id = ?').get(used));
+
+  r = await owner('POST', `/modeller/${free}/sil`);
+  assert.match(r.location, /m=silindi/);
+  assert.strictEqual(db.prepare('SELECT 1 FROM models WHERE id = ?').get(free), undefined);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM model_images WHERE model_id = ?').get(free).n, 0);
+  await new Promise((resolve) => { setTimeout(resolve, 50); });
+  assert.ok(!fs.existsSync(path.join(process.env.DATA_DIR, 'uploads', file)), 'görsel dosyası silinir');
+  r = await owner('GET', r.location);
+  assert.match(r.text, /silindi\./);
+
+  r = await admin('POST', `/modeller/${adminsTarget}/sil`);
+  assert.match(r.location, /m=silindi/, 'admin herkesin modelini silebilir');
+
+  // Numara yeniden kullanılmaz
+  const next = await newModel(owner, 'Sonraki');
+  assert.ok(next > adminsTarget);
+});

@@ -220,7 +220,8 @@ app.post('/cikis', (req, res) => { auth.endSession(req, res); res.redirect('/gir
 const modelList = (q = '', marka = '') => {
   const like = `%${q}%`;
   return db.prepare(`
-    SELECT m.*, (SELECT COUNT(*) FROM model_images i WHERE i.model_id = m.id) AS image_count
+    SELECT m.*, (SELECT COUNT(*) FROM model_images i WHERE i.model_id = m.id) AS image_count,
+      (SELECT COUNT(*) FROM survey_models sm WHERE sm.model_id = m.id) AS survey_count
     FROM models m
     WHERE (? = '' OR m.ana_kumas LIKE ? OR m.icerik LIKE ? OR m.kirilim LIKE ? OR printf('MDL-%04d', m.id) LIKE ?)
       AND (? = '' OR json_extract(m.kirilim, '$[0]') = ?)
@@ -243,7 +244,13 @@ function removeFiles(files = []) {
 app.get('/modeller', auth.requireUser, (req, res) => {
   const q = field(req.query.q, 60);
   const marka = field(req.query.marka, 120);
-  send(res, views.modelsPage({ user: req.user, models: modelList(q, marka), q, marka, markas: usedMarkas() }));
+  const code = modelCode(Number(req.query.kod) || 0);
+  const flash = {
+    silindi: { ok: `${code} silindi.` },
+    kullaniliyor: { err: `${code} bir ankette kullanıldığı için silinemez. Önce o anketi silin.` },
+    yetki: { err: 'Bu modeli yalnızca ekleyen kişi ya da admin silebilir.' },
+  }[req.query.m];
+  send(res, views.modelsPage({ user: req.user, models: modelList(q, marka), q, marka, markas: usedMarkas(), flash }));
 });
 
 app.get('/modeller/yeni', auth.requireUser, (req, res) => send(res, views.modelFormPage({ user: req.user, nextCode: nextModelCode() })));
@@ -297,7 +304,10 @@ const getModel = (id) => db.prepare('SELECT * FROM models WHERE id = ?').get(Num
 app.get('/modeller/:id', auth.requireUser, (req, res) => {
   const model = getModel(req.params.id);
   if (!model) return res.redirect('/modeller');
-  send(res, views.modelFormPage({ user: req.user, model, images: modelImages(model.id), added: req.query.m === 'eklendi', saved: req.query.m === 'kaydedildi' }));
+  send(res, views.modelFormPage({
+    user: req.user, model, images: modelImages(model.id), added: req.query.m === 'eklendi', saved: req.query.m === 'kaydedildi',
+    canDelete: canDeleteModel(req.user, model), surveyCount: modelSurveyCount(model.id),
+  }));
 });
 
 app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) => {
@@ -330,6 +340,21 @@ app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) =
     (req.files || []).forEach((f, i) => addImg.run(model.id, f.filename, field(labels[i], 80) || null, start + i));
   });
   res.redirect(req.body.next === 'anket' ? `/anketler/yeni?model=${model.id}` : `/modeller/${model.id}?m=kaydedildi`);
+});
+
+// Modeli ekleyen ya da admin silebilir. Ankette kullanılan model silinmez (o anketin sonuçları bozulmasın).
+const canDeleteModel = (user, model) => Boolean(user.is_admin) || model.user_id === user.id;
+const modelSurveyCount = (id) => db.prepare('SELECT COUNT(*) AS n FROM survey_models WHERE model_id = ?').get(id).n;
+
+app.post('/modeller/:id/sil', auth.requireUser, (req, res) => {
+  const model = getModel(req.params.id);
+  if (!model) return res.redirect('/modeller');
+  if (!canDeleteModel(req.user, model)) return res.redirect('/modeller?m=yetki');
+  if (modelSurveyCount(model.id)) return res.redirect(`/modeller?m=kullaniliyor&kod=${model.id}`);
+  const images = modelImages(model.id);
+  db.prepare('DELETE FROM models WHERE id = ?').run(model.id);
+  for (const im of images) fs.rm(path.join(config.uploadDir, im.filename), { force: true }, () => {});
+  res.redirect(`/modeller?m=silindi&kod=${model.id}`);
 });
 
 app.post('/modeller/:id/gorsel/:imageId/sil', auth.requireUser, (req, res) => {
