@@ -411,18 +411,20 @@ function resultsList(models) {
 // İngilizce ankette katılımcının göreceği metinler: Türkçesi, İngilizcesi (düzeltilebilir).
 function translationsCard(survey, translations, engineName) {
   const missing = translations.filter((t) => !t.en).length;
+  const copied = translations.filter((t) => t.copied).length;
   return html`<form class="card stack" id="ceviriler" method="post" action="/anketler/${survey.id}/ceviri">
     <div class="label">İngilizce metinler <span class="lang-pill">EN</span></div>
     <p class="sub">Metinler ${engineName} ile otomatik çevrilir. Kontrol edip gerekirse düzeltin; düzeltmeniz sonraki anketlerde de kullanılır.</p>
-    ${missing ? html`<div class="info">${missing} metnin İngilizcesi eksik (otomatik çeviri şu an yapılamadı). “Eksikleri otomatik çevir” ile tekrar deneyin ya da aşağıya yazın. Eksik çeviri varken anket gönderilmez.</div>` : ''}
+    ${missing ? html`<div class="info">${missing} metnin İngilizcesi eksik. “Eksikleri otomatik çevir” ile tekrar deneyin ya da aşağıya yazın. Eksik çeviri varken anket gönderilmez.</div>` : ''}
+    ${copied ? html`<div class="info">${copied} metin şu an çevrilemedi, Türkçesi aynen kullanılacak. İsterseniz İngilizcesini yazın ya da “Eksikleri otomatik çevir” ile tekrar deneyin.</div>` : ''}
     <div class="tr-list">${translations.map((t) => html`<div class="tr-row">
       <div class="tr-src"><small>${t.label}</small><span>${t.source}</span></div>
       <input type="hidden" name="src" value="${t.source}">
-      <input name="en" maxlength="500" placeholder="English" value="${t.en || ''}" aria-label="${t.label} İngilizcesi" class="${t.en ? '' : 'missing-input'}">
+      <input name="en" maxlength="500" placeholder="English" value="${t.en || ''}" aria-label="${t.label} İngilizcesi" class="${t.en && !t.copied ? '' : 'missing-input'}">
     </div>`)}</div>
     <div class="actions">
       <button class="btn btn-sm">İngilizce metinleri kaydet</button>
-      ${missing ? html`<button class="btn btn-sm btn-soft" formaction="/anketler/${survey.id}/ceviri/otomatik" formnovalidate>Eksikleri otomatik çevir</button>` : ''}
+      ${missing || copied ? html`<button class="btn btn-sm btn-soft" formaction="/anketler/${survey.id}/ceviri/otomatik" formnovalidate>Eksikleri otomatik çevir</button>` : ''}
     </div>
   </form>`;
 }
@@ -455,6 +457,10 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     <div class="card stack">
       <div class="label">Davet maili</div>
       <a class="btn outlook" id="outlook" href="${invite ? invite.href : '#'}">Outlook'ta aç</a>
+      ${completed ? '' : html`<form method="post" action="/anketler/${survey.id}/geri-al" class="undo">
+        <button class="btn btn-soft">← Vazgeç, taslağa geri al</button>
+        <small class="sub">Maili göndermediyseniz anketi taslağa geri alıp düzenleyebilirsiniz. Yanıt gelmeye başlayınca bu seçenek kalkar.</small>
+      </form>`}
       ${invite && !invite.recipientsIncluded ? html`<div class="info">Alıcı listesi Outlook linkine sığmadı. Mail alıcısız açılır; aşağıdan adresleri kopyalayıp “Gizli” (BCC) alanına yapıştırın.</div>` : ''}
       <p class="sub">Outlook açılmazsa cihazınızda varsayılan mail uygulaması olarak Outlook'u seçin ya da aşağıdaki metinleri kopyalayıp kendiniz gönderin.</p>
       <details><summary>Alıcılar ve mail metni</summary>

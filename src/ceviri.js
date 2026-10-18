@@ -43,30 +43,52 @@ async function deepl(texts) {
   return data.translations.map((t) => t.text);
 }
 
-// Google Çeviri'nin anahtarsız ucu; DeepL anahtarı eklenene kadar geçici çözüm.
-async function google(text) {
-  const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q=' + encodeURIComponent(text);
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error(`Google ${res.status}`);
-  const data = await res.json();
-  const out = (data[0] || []).map((part) => part[0]).join('').trim();
-  if (!out) throw new Error('Google boş çeviri döndü');
-  return out;
+// Google Çeviri'nin anahtarsız uçları; DeepL anahtarı eklenene kadar geçici çözüm. Biri sınır koyarsa (429) diğeri denenir.
+const GOOGLE = [
+  (q) => 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=en&dt=t&q=' + encodeURIComponent(q),
+  (q) => 'https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=tr&tl=en&q=' + encodeURIComponent(q),
+];
+
+// İki uç farklı biçimde döner: [[["çeviri","kaynak"],…],…] ya da [["çeviri","tr"]] / ["çeviri"].
+function googleText(data) {
+  if (Array.isArray(data) && Array.isArray(data[0]) && Array.isArray(data[0][0])) return data[0].map((p) => p[0]).join('');
+  const first = Array.isArray(data) ? data[0] : null;
+  return Array.isArray(first) ? first[0] : first;
 }
 
-// Yeni çeviri yalnızca boşsa ya da Google çevirisini DeepL ile yeniliyorsa yazılır; elle düzeltilen korunur.
+async function google(text) {
+  const errors = [];
+  for (const url of GOOGLE) {
+    try {
+      const res = await fetch(url(text), { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error(`Google ${res.status}`);
+      const out = String(googleText(await res.json()) || '').trim();
+      if (out) return out;
+      throw new Error('Google boş çeviri döndü');
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+  throw new Error(errors.join(', '));
+}
+
+// Yeni çeviri boşsa ya da daha iyi bir çeviriyle (Türkçesinin kopyası → Google → DeepL) yenileniyorsa yazılır;
+// elle düzeltilen hiçbir zaman ezilmez.
 const save = (source, en, engine) => db.prepare(`INSERT INTO translations (source, en, engine) VALUES (?, ?, ?)
   ON CONFLICT (source) DO UPDATE SET en = excluded.en, engine = excluded.engine, updated_at = datetime('now')
-  WHERE translations.engine = 'google' AND excluded.engine = 'deepl'`).run(source, en, engine);
+  WHERE (translations.engine = 'kopya' AND excluded.engine IN ('google', 'deepl'))
+     OR (translations.engine = 'google' AND excluded.engine = 'deepl')`).run(source, en, engine);
 
-// Eksik çevirileri tamamlar: önce DeepL, olmazsa Google. Hata olursa anket akışı durmaz; eksikler elle yazılabilir.
-async function translateMissing(sources) {
+// Eksik çevirileri tamamlar: önce DeepL, olmazsa Google. Çevrilemeyen metin Türkçesiyle yazılır ('kopya'),
+// böylece anket beklemeden gönderilebilir; kopyalar "Eksikleri otomatik çevir" (retry) ya da DeepL ile yeniden denenir.
+async function translateMissing(sources, { retry = false } = {}) {
   const missing = [...new Set(sources.filter(Boolean))].filter((s) => {
     const r = row(s);
-    return !r || (deeplEnabled() && r.engine === 'google');
+    if (!r) return true;
+    if (r.engine === 'kopya') return retry || deeplEnabled();
+    return deeplEnabled() && r.engine === 'google';
   });
   if (!missing.length) return { translated: 0 };
-  let rest = missing;
   const errors = [];
   if (deeplEnabled()) {
     try {
@@ -78,21 +100,26 @@ async function translateMissing(sources) {
       return { translated: missing.length };
     } catch (err) {
       errors.push(err.message);
-      rest = missing.filter((s) => lookup(s) === null);
     }
   }
-  let done = missing.length - rest.length;
+  const rest = missing.filter((s) => [null, 'kopya'].includes(row(s)?.engine ?? null));
+  let googleOk = true;
+  let copied = 0;
   for (const s of rest) {
-    try {
-      save(s, await google(s), 'google');
-      done++;
-    } catch (err) {
-      errors.push(err.message);
-      break;
+    if (googleOk) {
+      try {
+        save(s, await google(s), 'google');
+        continue;
+      } catch (err) {
+        errors.push(err.message);
+        googleOk = false; // sınır konduysa kalanlar için tekrar denenmez
+      }
     }
+    save(s, s, 'kopya');
+    copied++;
   }
   if (errors.length) console.error('Çeviri yapılamadı:', errors.join(' / '));
-  return done === missing.length ? { translated: done } : { translated: done, error: errors.join(' / ') };
+  return { translated: missing.length - copied, copied };
 }
 
 // Bir anketin katılımcıya görünen Türkçe metinleri: başlık, model bilgileri, A/B konusu ve seçenek adları.
@@ -112,10 +139,13 @@ function surveyTexts(survey) {
   }
   const seen = new Set();
   return texts.filter((t) => t.source && !seen.has(t.source) && seen.add(t.source))
-    .map((t) => ({ ...t, en: lookup(t.source) }));
+    .map((t) => {
+      const r = row(t.source);
+      return { ...t, en: r ? r.en : null, copied: r?.engine === 'kopya' };
+    });
 }
 
-const translateSurvey = (survey) => translateMissing(surveyTexts(survey).map((t) => t.source));
+const translateSurvey = (survey, opts) => translateMissing(surveyTexts(survey).map((t) => t.source), opts);
 const missingFor = (survey) => surveyTexts(survey).filter((t) => !t.en);
 
 // Katılımcıya gösterilecek metin: İngilizce ankette çevirisi, yoksa Türkçesi.

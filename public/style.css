@@ -338,3 +338,4 @@ select:disabled { opacity: .55; }
 .tr-src span { overflow-wrap: anywhere; }
 .missing-input { border-color: var(--warn) !important; }
 .step-info .ozellik { font-size: .9rem; }
+.undo { display: flex; flex-direction: column; gap: 6px; }

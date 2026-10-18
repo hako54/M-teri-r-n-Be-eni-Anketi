@@ -445,6 +445,7 @@ app.get('/anketler/:id', auth.requireUser, async (req, res) => {
     kapatildi: 'Anket kapatıldı. Sonucu aşağıdan Outlook ile gönderebilirsiniz.',
     'ceviri-eksik': 'Bazı metinlerin İngilizcesi eksik, bu yüzden anket taslak olarak bekliyor. Aşağıdaki İngilizce metinleri tamamlayıp “Gönder”e basın.',
     ceviri: 'İngilizce metinler kaydedildi.',
+    'geri-alindi': 'Gönderim geri alındı; anket yeniden taslak. Düzeltip “Gönder ve Outlook\'ta aç” ile tekrar gönderebilirsiniz.',
   };
   const results = computeResults(survey.id);
   const owner = { name: req.user.username, email: req.user.email };
@@ -500,8 +501,19 @@ app.post('/anketler/:id/ceviri', auth.requireUser, (req, res) => {
 app.post('/anketler/:id/ceviri/otomatik', auth.requireUser, async (req, res) => {
   const survey = ownSurvey(req);
   if (!survey) return res.redirect('/anketler');
-  await ceviri.translateSurvey(survey);
+  await ceviri.translateSurvey(survey, { retry: true });
   res.redirect(`/anketler/${survey.id}#ceviriler`);
+});
+
+// "Oluştur ve gönder"den vazgeçme: henüz yanıt gelmemiş canlı anketi taslağa geri alır.
+// Kapanış zamanı, yeniden gönderildiğinde o andan itibaren hesaplanır.
+app.post('/anketler/:id/geri-al', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey) return res.redirect('/anketler');
+  const answered = db.prepare('SELECT COUNT(*) AS n FROM invitations WHERE survey_id = ? AND completed_at IS NOT NULL').get(survey.id).n;
+  if (!survey.published_at || survey.closed_at || answered) return res.redirect(`/anketler/${survey.id}`);
+  db.prepare('UPDATE surveys SET published_at = NULL WHERE id = ?').run(survey.id);
+  res.redirect(`/anketler/${survey.id}?m=geri-alindi`);
 });
 
 // Anketi siler: davetler, yanıtlar, yorumlar ve tercihler de silinir (veritabanında zincirleme). Modeller kalır.

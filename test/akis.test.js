@@ -21,7 +21,7 @@ global.fetch = async (url, opts) => {
     if (deeplDown) return new Response('servis yok', { status: 503 });
     return Response.json({ translations: body.text.map((t) => ({ text: `EN ${t}` })) });
   }
-  if (String(url).startsWith('https://translate.googleapis.com/')) {
+  if (String(url).startsWith('https://translate.googleapis.com/') || String(url).startsWith('https://clients5.google.com/')) {
     if (googleDown) return new Response('sorry', { status: 429 });
     const q = new URL(url).searchParams.get('q');
     return Response.json([[[`GEN ${q}`, q]], null, 'tr']);
@@ -591,7 +591,7 @@ test('İngilizce anket: dil seçimi, otomatik çeviri, düzeltme, İngilizce kat
   assert.match(r.text, /İçerik;Tuşe \/ Özellik;/);
   assert.match(r.text, /Kaşe kumaş;%80 Yün %20 Polyamid;yumuşak tuşe;/);
 
-  // DeepL ve Google çalışmazsa yeni metinli anket taslakta bekler
+  // DeepL ve Google çalışmazsa metin Türkçesiyle yazılır ve anket beklemeden gönderilir
   deeplDown = true; googleDown = true;
   const fd2 = new FormData();
   fd2.append('ana_kumas', 'Çevrilmemiş kumaş'); fd2.append('icerik', '%100 Keten');
@@ -600,19 +600,35 @@ test('İngilizce anket: dil seçimi, otomatik çeviri, düzeltme, İngilizce kat
   const body2 = surveyBody({ title: 'Yeni İngilizce anket', models: [m2], emails: 'x@f.com', action: 'gonder' });
   body2.set('lang', 'en');
   r = await admin('POST', '/anketler', body2);
-  assert.match(r.location, /m=ceviri-eksik/);
+  assert.match(r.location, /m=yayinda/);
   const id2 = Number(r.location.match(/anketler\/(\d+)/)[1]);
-  assert.strictEqual(db.prepare('SELECT published_at FROM surveys WHERE id = ?').get(id2).published_at, null);
+  assert.strictEqual(db.prepare("SELECT engine FROM translations WHERE source = '%100 Keten'").get().engine, 'kopya');
   r = await admin('GET', r.location);
-  assert.match(r.text, /metnin İngilizcesi eksik/);
+  assert.match(r.text, /value="Çevrilmemiş kumaş"/);
+  assert.match(r.text, /Türkçesi aynen kullanılacak/);
+  assert.match(r.text, /Eksikleri otomatik çevir/);
+
+  // "Eksikleri otomatik çevir": Google dönünce kopyalar çevrilir; DeepL dönünce Google çevirisi yenilenir
   googleDown = false;
-  r = await admin('GET', `/anketler/${id2}`);
-  assert.match(r.text, /value="GEN Çevrilmemiş kumaş"/, 'DeepL hata verirse sayfa açılışında Google ile çevrilir');
-  assert.strictEqual(db.prepare("SELECT engine FROM translations WHERE source = '%100 Keten'").get().engine, 'google');
+  await admin('POST', `/anketler/${id2}/ceviri/otomatik`);
+  assert.strictEqual(db.prepare("SELECT en FROM translations WHERE source = '%100 Keten'").get().en, 'GEN %100 Keten');
   deeplDown = false;
+  await admin('POST', `/anketler/${id2}/ceviri/otomatik`);
+  assert.strictEqual(db.prepare("SELECT en FROM translations WHERE source = '%100 Keten'").get().en, 'EN %100 Keten');
+
+  // Gönderimden vazgeçme: yanıt yokken taslağa geri alınır
+  r = await admin('GET', `/anketler/${id2}`);
+  assert.match(r.text, /taslağa geri al/);
+  r = await admin('POST', `/anketler/${id2}/geri-al`);
+  assert.match(r.location, /m=geri-alindi/);
+  assert.strictEqual(db.prepare('SELECT published_at FROM surveys WHERE id = ?').get(id2).published_at, null);
   r = await admin('POST', `/anketler/${id2}/yayinla`);
   assert.match(r.location, /m=yayinda/);
-  assert.strictEqual(db.prepare("SELECT en FROM translations WHERE source = '%100 Keten'").get().en, 'EN %100 Keten', 'DeepL dönünce Google çevirisi yenilenir');
+  // Yanıt gelen ankette geri alma yok
+  r = await admin('GET', `/anketler/${id}`);
+  assert.doesNotMatch(r.text, /taslağa geri al/);
+  r = await admin('POST', `/anketler/${id}/geri-al`);
+  assert.ok(db.prepare('SELECT published_at FROM surveys WHERE id = ?').get(id).published_at);
 });
 
 test('alıcı listesi isteğe bağlı: boş bırakılınca Outlook alıcısız açılır, link ile katılınır', async () => {
