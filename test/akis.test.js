@@ -63,6 +63,11 @@ async function join(token, email) {
 }
 
 let admin;
+// Ham fetch gerektiren (ikili yanıt) istekler için admin çerezini yeniden alır.
+async function adminCookie() {
+  const res = await fetch(`${base}/giris`, { method: 'POST', body: new URLSearchParams({ username: 'ayse', password: 'gizli-sifre' }), redirect: 'manual' });
+  return res.headers.get('set-cookie').split(';')[0];
+}
 test.before(async () => {
   await new Promise((resolve) => { server = app.listen(0, resolve); });
   base = `http://127.0.0.1:${server.address().port}`;
@@ -165,6 +170,19 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   assert.match(r.text, /data-then="mailto:ayse%40firma.com.tr\?subject=Anket%20sonucu%3A%20Yaz%202027/);
   assert.match(r.text, /<textarea id="rapor" hidden>&lt;!doctype html&gt;/, 'görselli rapor kopyalanmaya hazır');
   assert.match(r.text, /Linkle katıldı/);
+  const png = await fetch(`${base}/anketler/${surveyId}/rapor.png`, { headers: { cookie: await adminCookie() } });
+  assert.strictEqual(png.headers.get('content-type'), 'image/png');
+  assert.deepStrictEqual([...Buffer.from(await png.arrayBuffer()).subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+
+  r = await admin('GET', `/anketler/${surveyId}/sonuc.eml`);
+  assert.match(r.text, /^To: ayse@firma.com.tr\r\n/);
+  assert.match(r.text, /\r\nX-Unsent: 1\r\n/, 'Outlook taslak olarak açar');
+  assert.doesNotMatch(r.text, /^From:/m, 'gönderen Outlook hesabıdır');
+  assert.match(r.text, /Content-ID: <rapor-\d+@model-begeni-anketi>/);
+  assert.strictEqual((r.text.match(/Content-Disposition: attachment/g) || []).length, 3, 'görsel + 2 Excel eki');
+  const htmlPart = r.text.split('Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n')[1].split('--')[0];
+  assert.match(Buffer.from(htmlPart, 'base64').toString('utf8'), /<img src="cid:rapor-\d+@model-begeni-anketi"/);
+
   r = await admin('POST', `/anketler/${surveyId}/sonuc-acildi`);
   assert.strictEqual(r.status, 204);
   r = await admin('GET', '/anketler');

@@ -13,6 +13,7 @@
     "node": ">=22.5"
   },
   "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
     "express": "5.2.1",
     "multer": "2.4.0"
   }

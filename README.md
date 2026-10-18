@@ -13,7 +13,11 @@ Model görsellerini yükleyip beğeni anketi yapan web uygulaması. Davet ve son
 - **Test linki (yalnızca admin):** Admin, anketi canlıya almadan önce katılımcının göreceği şekilde dener; test yanıtları kaydedilmez. Adminler `ADMIN_EMAILS` ayarındaki adreslerle kayıtlı kullanıcılardır.
 - **Katılımcı ekranı:** Telefonda modeller tek tek gösterilir. Her model için 1–5 puan **veya "Tarzım değil"** seçilir (ortalamaya katılmaz); isteğe bağlı yorum yazılır.
 - **Kapanış hatırlatıcısı:** Canlıdaki anket sayfasından kapanış anı için Outlook takvimine hatırlatıcı (.ics) eklenir; hatırlatıcıdaki link sonuç maili sayfasını açar.
-- **Sonuç:** Bitiş günü ve saatinde anket kendiliğinden kapanır. "Raporu kopyala ve Outlook'u aç" düğmesi görselli raporu panoya kopyalar ve Outlook'u "Sonuç kime gelsin?" alıcılarıyla açar; rapor mail gövdesine yapıştırılır. Mailde ayrıca giriş gerektirmeyen sonuç sayfası linki bulunur. Sonucu henüz gönderilmemiş anketler listede "Sonucu gönder" ile işaretlenir.
+- **Sonuç maili (ekli ve görselli):** Anket bitiş günü ve saatinde kendiliğinden kapanır. Sonuç raporu bir görsel (PNG) olarak üretilir.
+  - *Bilgisayar:* "Outlook taslağını aç" bir `.eml` taslağı indirir; açılınca Outlook'ta alıcısı ("Sonuç kime gelsin?") ve konusu dolu, rapor görseli mailin içinde, görsel ve Excel dosyaları (`sonuclar.csv`, `yorumlar.csv`) ekte yeni bir mail açılır. Mail, Outlook'ta açık hesaptan, yani anketi oluşturanın adresinden gider.
+  - *Telefon:* "Paylaş → Outlook" görseli ve Excel dosyalarını paylaşım menüsüyle Outlook'a ek olarak verir (alıcı elle yazılır).
+  - *Diğer yol:* raporu panoya kopyalayıp Outlook'u açan düğme.
+  Sonucu henüz gönderilmemiş anketler listede "Sonucu gönder" ile işaretlenir.
 
 ## Kırılım listesini güncelleme / yeni başlık ekleme
 
@@ -62,7 +66,9 @@ src/db.js         SQLite tabloları
 src/surveys.js    anket oluşturma, davet gönderimi, zamanlayıcı
 src/results.js    ortalama, sıralama, CSV
 src/outlook.js    Outlook (mailto) linkleri ve takvim hatırlatıcısı
-src/rapor.js      görselli sonuç raporu (Outlook'a yapıştırılır)
+src/rapor.js      sonuç raporu HTML'i (Outlook'a yapıştırılır)
+src/gorsel.js     sonuç raporu görseli (PNG, assets/fonts ile çizilir)
+src/eml.js        ekli ve görselli Outlook taslağı (.eml)
 src/kirilim.js    alt kırılımlı ürün grupları
 src/views.js      sayfalar
 public/           stil ve küçük tarayıcı betikleri

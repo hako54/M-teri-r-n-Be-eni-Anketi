@@ -258,3 +258,8 @@ select:disabled { opacity: .55; }
 .actions .btn { flex: 1 1 220px; }
 .warn-note { color: var(--warn); font-size: .82rem; font-weight: 700; margin: 0; }
 .result-mail.pending { outline: 3px solid var(--accent); outline-offset: -3px; }
+.report-preview { display: block; max-height: 420px; overflow: hidden; border-radius: 14px; border: 2px solid var(--line); position: relative; }
+.report-preview img { display: block; width: 100%; }
+.report-preview::after { content: "Tam boyut için dokunun"; position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 10px 8px; text-align: center; font-size: .8rem; font-weight: 700; color: var(--accent-ink); background: linear-gradient(transparent, #fff 70%); }
+.send-option { display: flex; flex-direction: column; gap: 6px; }
+.send-option p { margin: 0; }

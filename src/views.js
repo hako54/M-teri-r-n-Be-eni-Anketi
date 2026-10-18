@@ -301,9 +301,22 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     ${state === 'acik' ? livePanel : ''}
     ${state === 'kapali' ? html`<div class="card stack result-mail ${survey.result_opened_at ? '' : 'pending'}">
       <div class="label">Sonuç maili ${survey.result_opened_at ? html`<span class="pill done">Outlook'ta açıldı</span>` : ''}</div>
-      <p class="sub">Mail sizin Outlook hesabınızdan <b>${survey.result_emails.replace(/,/g, ', ')}</b> adresine gider. Düğmeye basınca görselli rapor panoya kopyalanır ve Outlook açılır; mailin gövdesine tıklayıp <b>yapıştırın</b> (Ctrl+V, telefonda uzun basıp Yapıştır).</p>
-      <button type="button" class="btn outlook" id="sonuc-gonder" data-copy-html="rapor" data-then="${resultMailto}" data-ping="/anketler/${survey.id}/sonuc-acildi">Raporu kopyala ve Outlook'u aç</button>
-      <p class="sub small">Yapıştırmasanız da mailde sonuç özeti ve görselli rapor linki bulunur.</p>
+      <p class="sub">Mail sizin Outlook hesabınızdan <b>${survey.result_emails.replace(/,/g, ', ')}</b> adresine gider. Rapor görseli mailin içinde, görsel ve Excel dosyaları ekte olur.</p>
+      <a class="report-preview" href="/anketler/${survey.id}/rapor.png" target="_blank" rel="noopener"><img src="/anketler/${survey.id}/rapor.png" alt="Sonuç raporu görseli"></a>
+      <div class="send-option" data-device="pc">
+        <a class="btn outlook" href="/anketler/${survey.id}/sonuc.eml" data-ping="/anketler/${survey.id}/sonuc-acildi">Bilgisayar: Outlook taslağını aç</a>
+        <p class="sub small">İnen dosyayı açın. Outlook'ta alıcısı ve konusu dolu, rapor görseli içinde, ekleri hazır yeni bir mail açılır; kontrol edip <b>Gönder</b>'e basın. Mail okunur halde açılırsa <b>İlet</b>'e basın, görsel ve ekler korunur.</p>
+      </div>
+      <div class="send-option" data-device="phone" hidden>
+        <button type="button" class="btn outlook" data-share="${survey.id}" data-title="Anket sonucu: ${survey.title}" data-ping="/anketler/${survey.id}/sonuc-acildi">Telefon: Paylaş → Outlook</button>
+        <p class="sub small">Paylaş menüsünden Outlook'u seçin; rapor görseli ve Excel dosyaları ekli yeni mail açılır. Alıcıya <b>${survey.result_emails.replace(/,/g, ', ')}</b> yazın.</p>
+      </div>
+      <details><summary>Diğer yol: raporu kopyalayıp yapıştır</summary>
+        <div class="stack" style="margin-top:10px">
+          <button type="button" class="btn btn-soft" id="sonuc-gonder" data-copy-html="rapor" data-then="${resultMailto}" data-ping="/anketler/${survey.id}/sonuc-acildi">Raporu kopyala ve Outlook'u aç</button>
+          <p class="sub small">Outlook açılınca mailin gövdesine yapıştırın (Ctrl+V, telefonda uzun basıp Yapıştır).</p>
+        </div>
+      </details>
       <textarea id="rapor" hidden>${resultHtml || ''}</textarea>
       ${copyField('sonuclink', 'Sonuç sayfası (giriş gerektirmez)', links.result, 'Aç')}
     </div>` : ''}

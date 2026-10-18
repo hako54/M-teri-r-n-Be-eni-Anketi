@@ -8,7 +8,9 @@ const { db, tx, modelCode, modelImages, isAbTest, TEST_KONULARI } = require('./d
 const auth = require('./auth');
 const views = require('./views');
 const { closesAt, formatTR } = require('./time');
-const { computeResults, resultsCsv, firstImage } = require('./results');
+const { computeResults, resultsCsv, commentsCsv, firstImage } = require('./results');
+const { renderReportPng } = require('./gorsel');
+const { resultDraft } = require('./eml');
 const { resultEmail } = require('./rapor');
 const surveys = require('./surveys');
 const kirilim = require('./kirilim');
@@ -300,10 +302,40 @@ app.post('/anketler/:id/kapat', auth.requireUser, (req, res) => {
   res.redirect(`/anketler/${survey.id}?m=kapatildi`);
 });
 
+const isClosed = (s) => Boolean(s.closed_at) || (Boolean(s.published_at) && new Date(s.closes_at) <= new Date());
+const markResultOpened = (id) => db.prepare('UPDATE surveys SET result_opened_at = COALESCE(result_opened_at, ?) WHERE id = ?').run(new Date().toISOString(), id);
+
+app.get('/anketler/:id/rapor.png', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey || !survey.published_at) return res.redirect('/anketler');
+  res.type('png').set('Cache-Control', 'no-store').send(renderReportPng(computeResults(survey.id)));
+});
+
+app.get('/anketler/:id/yorumlar.csv', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey) return res.redirect('/anketler');
+  res.type('text/csv; charset=utf-8').attachment(`anket-${survey.id}-yorumlar.csv`).send(commentsCsv(computeResults(survey.id)));
+});
+
+// Outlook taslağı: rapor görseli mailin içinde, görsel ve Excel dosyaları ekte, alıcı ve konu dolu.
+app.get('/anketler/:id/sonuc.eml', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey || !isClosed(survey)) return res.redirect(`/anketler/${req.params.id}`);
+  const results = computeResults(survey.id);
+  const draft = resultDraft({
+    results,
+    ownerName: req.user.username,
+    png: renderReportPng(results),
+    csv: { results: resultsCsv(results), comments: commentsCsv(results) },
+  });
+  markResultOpened(survey.id);
+  res.type('message/rfc822').attachment(`anket-${survey.id}-sonuc.eml`).send(draft);
+});
+
 // Sonuç maili Outlook'ta açıldı: listede "Sonucu gönder" uyarısı kalkar.
 app.post('/anketler/:id/sonuc-acildi', auth.requireUser, (req, res) => {
   const survey = ownSurvey(req);
-  if (survey) db.prepare('UPDATE surveys SET result_opened_at = COALESCE(result_opened_at, ?) WHERE id = ?').run(new Date().toISOString(), survey.id);
+  if (survey) markResultOpened(survey.id);
   res.status(204).end();
 });
 
