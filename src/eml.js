@@ -54,13 +54,13 @@ function buildDraft({ to, subject, html, inlineImage, files = [] }) {
   return lines.join(CRLF);
 }
 
-function resultDraft({ results, ownerName, png, csv }) {
+function resultDraft({ results, ownerName, png, pdf, csv }) {
   const { survey, invited, completed } = results;
   const link = `${config.baseUrl}/sonuc/${survey.result_token}`;
   const cid = `rapor-${survey.id}@model-begeni-anketi`;
   const html = `<!doctype html><html><body style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#22385A">
 <p>Merhaba,</p>
-<p><b>${esc(survey.title)}</b> anketi sonuçlandı. ${completed} kişi yanıtladı (${invited} davetli). Sonuçların özeti aşağıda; ayrıntılı puanlar ve yorumlar ekteki Excel dosyalarında.</p>
+<p><b>${esc(survey.title)}</b> anketi sonuçlandı. ${completed} kişi yanıtladı (${invited} davetli). Sonuçların özeti aşağıda; raporun tamamı ve yorumlar ekteki PDF'te, ayrıntılı puanlar Excel dosyalarında.</p>
 <p><img src="cid:${cid}" alt="Anket sonucu" width="760" style="max-width:100%;border-radius:12px"></p>
 <p>Görselli sonuç sayfası: <a href="${link}">${link}</a></p>
 <p>${esc(ownerName)}</p>
@@ -71,6 +71,7 @@ function resultDraft({ results, ownerName, png, csv }) {
     html,
     inlineImage: { cid, filename: 'anket-sonucu.png', content: png },
     files: [
+      { filename: 'anket-sonucu.pdf', contentType: 'application/pdf', content: pdf },
       { filename: 'anket-sonucu.png', contentType: 'image/png', content: png },
       { filename: 'sonuclar.csv', contentType: 'text/csv; charset=UTF-8', content: Buffer.from(csv.results, 'utf8') },
       { filename: 'yorumlar.csv', contentType: 'text/csv; charset=UTF-8', content: Buffer.from(csv.comments, 'utf8') },

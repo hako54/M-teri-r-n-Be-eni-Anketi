@@ -21,6 +21,7 @@ Model görsellerini yükleyip beğeni anketi yapan web uygulaması. Davet ve son
   - *Bilgisayar:* "Outlook taslağını aç" bir `.eml` taslağı indirir; açılınca Outlook'ta alıcısı ("Sonuç kime gelsin?") ve konusu dolu, rapor görseli mailin içinde, görsel ve Excel dosyaları (`sonuclar.csv`, `yorumlar.csv`) ekte yeni bir mail açılır. Mail, Outlook'ta açık hesaptan, yani anketi oluşturanın adresinden gider.
   - *Telefon:* "Paylaş → Outlook" görseli ve Excel dosyalarını paylaşım menüsüyle Outlook'a ek olarak verir (alıcı elle yazılır).
   - *Diğer yol:* raporu panoya kopyalayıp Outlook'u açan düğme.
+- **PDF rapor:** Anket sayfasındaki ve herkese açık sonuç sayfasındaki "Sonuçları indir (PDF)" düğmesi; rapor A4 sayfalara bölünür (model kartı iki sayfaya bölünmez), son sayfalarda yorumlar metin olarak yer alır. PDF sonuç mailine ve telefon paylaşımına da eklenir.
   Sonucu henüz gönderilmemiş anketler listede "Sonucu gönder" ile işaretlenir.
 
 ## Güncellemeler
@@ -79,6 +80,7 @@ src/outlook.js    Outlook (mailto) linkleri ve takvim hatırlatıcısı
 src/rapor.js      sonuç raporu HTML'i (Outlook'a yapıştırılır)
 src/gorsel.js     sonuç raporu görseli (PNG, assets/fonts ile çizilir)
 src/eml.js        ekli ve görselli Outlook taslağı (.eml)
+src/pdf.js        PDF sonuç raporu (pdfkit)
 src/kirilim.js    alt kırılımlı ürün grupları
 src/kullanici.js  kullanıcı adı ↔ şirket e-postası
 src/yedek.js      günlük yedek (disk + depolama alanı)

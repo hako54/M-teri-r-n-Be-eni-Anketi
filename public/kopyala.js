@@ -65,6 +65,7 @@
         .then(function (b) { return new File([b], name, { type: type }); });
     };
     Promise.all([
+      get('/anketler/' + id + '/sonuc.pdf', 'anket-sonucu.pdf', 'application/pdf'),
       get('/anketler/' + id + '/rapor.png', 'anket-sonucu.png', 'image/png'),
       get('/anketler/' + id + '/sonuclar.csv', 'sonuclar.csv', 'text/csv'),
       get('/anketler/' + id + '/yorumlar.csv', 'yorumlar.csv', 'text/csv'),

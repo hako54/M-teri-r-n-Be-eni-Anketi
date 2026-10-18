@@ -155,6 +155,8 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
 
   r = await anon('GET', `/sonuc/${survey.result_token}`);
   assert.match(r.text, /Sonuç henüz hazır değil/);
+  r = await anon('GET', `/sonuc/${survey.result_token}/rapor.pdf`);
+  assert.strictEqual(r.status, 302, 'anket kapanmadan PDF verilmez');
 
   r = await admin('GET', `/anketler/${surveyId}/hatirlatici.ics`);
   assert.match(r.text, /BEGIN:VEVENT/);
@@ -177,6 +179,16 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   assert.match(r.text, /Anket kapandı/);
   r = await anon('GET', `/sonuc/${survey.result_token}`);
   assert.match(r.text, /Rengi çok güzel/);
+
+  // PDF: anket sayfasından ve herkese açık sonuç sayfasından
+  const pdfRes = await fetch(`${base}/anketler/${surveyId}/sonuc.pdf`, { headers: { cookie: await adminCookie() } });
+  assert.strictEqual(pdfRes.headers.get('content-type'), 'application/pdf');
+  assert.match(pdfRes.headers.get('content-disposition'), /Anket-sonucu-Yaz-2027\.pdf/);
+  const pdf = Buffer.from(await pdfRes.arrayBuffer());
+  assert.strictEqual(pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.ok((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length >= 2, 'rapor + yorumlar sayfası');
+  const pubPdf = await fetch(`${base}/sonuc/${survey.result_token}/rapor.pdf`);
+  assert.strictEqual(pubPdf.headers.get('content-type'), 'application/pdf');
   assert.match(r.text, /4,5/);
 
   r = await admin('GET', '/anketler');
@@ -195,7 +207,8 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   assert.match(r.text, /\r\nX-Unsent: 1\r\n/, 'Outlook taslak olarak açar');
   assert.doesNotMatch(r.text, /^From:/m, 'gönderen Outlook hesabıdır');
   assert.match(r.text, /Content-ID: <rapor-\d+@model-begeni-anketi>/);
-  assert.strictEqual((r.text.match(/Content-Disposition: attachment/g) || []).length, 3, 'görsel + 2 Excel eki');
+  assert.strictEqual((r.text.match(/Content-Disposition: attachment/g) || []).length, 4, 'PDF + görsel + 2 Excel eki');
+  assert.match(r.text, /Content-Type: application\/pdf; name="anket-sonucu.pdf"/);
   const htmlPart = r.text.split('Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n')[1].split('--')[0];
   assert.match(Buffer.from(htmlPart, 'base64').toString('utf8'), /<img src="cid:rapor-\d+@model-begeni-anketi"/);
 

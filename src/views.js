@@ -438,7 +438,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     ${state === 'acik' ? livePanel : ''}
     ${state === 'kapali' ? html`<div class="card stack result-mail ${survey.result_opened_at ? '' : 'pending'}">
       <div class="label">Sonuç maili ${survey.result_opened_at ? html`<span class="pill done">Outlook'ta açıldı</span>` : ''}</div>
-      <p class="sub">Mail sizin Outlook hesabınızdan <b>${survey.result_emails.replace(/,/g, ', ')}</b> adresine gider. Rapor görseli mailin içinde, görsel ve Excel dosyaları ekte olur.</p>
+      <p class="sub">Mail sizin Outlook hesabınızdan <b>${survey.result_emails.replace(/,/g, ', ')}</b> adresine gider. Rapor görseli mailin içinde; PDF rapor, görsel ve Excel dosyaları ekte olur.</p>
       <a class="report-preview" href="/anketler/${survey.id}/rapor.png" target="_blank" rel="noopener"><img src="/anketler/${survey.id}/rapor.png" alt="Sonuç raporu görseli"></a>
       <div class="send-option" data-device="pc">
         <a class="btn outlook" href="/anketler/${survey.id}/sonuc.eml" data-ping="/anketler/${survey.id}/sonuc-acildi">Bilgisayar: Outlook taslağını aç</a>
@@ -446,7 +446,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
       </div>
       <div class="send-option" data-device="phone" hidden>
         <button type="button" class="btn outlook" data-share="${survey.id}" data-title="Anket sonucu: ${survey.title}" data-ping="/anketler/${survey.id}/sonuc-acildi">Telefon: Paylaş → Outlook</button>
-        <p class="sub small">Paylaş menüsünden Outlook'u seçin; rapor görseli ve Excel dosyaları ekli yeni mail açılır. Alıcıya <b>${survey.result_emails.replace(/,/g, ', ')}</b> yazın.</p>
+        <p class="sub small">Paylaş menüsünden Outlook'u seçin; PDF rapor, görsel ve Excel dosyaları ekli yeni mail açılır. Alıcıya <b>${survey.result_emails.replace(/,/g, ', ')}</b> yazın.</p>
       </div>
       <details><summary>Diğer yol: raporu kopyalayıp yapıştır</summary>
         <div class="stack" style="margin-top:10px">
@@ -461,6 +461,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
       <div class="card stat"><div class="ring" style="--p:${rate}"><b>%${rate}</b></div><div><b>${completed} / ${invited}</b><div class="sub">davetli yanıtladı</div></div></div>
       <div class="card stat-actions">
         ${state === 'acik' ? html`<form method="post" action="/anketler/${survey.id}/kapat"><button class="btn btn-sm">Şimdi kapat</button></form>` : ''}
+        <a class="btn btn-sm btn-soft" href="/anketler/${survey.id}/sonuc.pdf">Sonuçları indir (PDF)</a>
         <a class="btn btn-sm btn-soft" href="/anketler/${survey.id}/sonuclar.csv">Sonuçları indir (Excel)</a>
       </div>
     </div>` : ''}
@@ -562,6 +563,7 @@ function publicResultPage({ results }) {
     body: html`
     <div class="head"><div><div class="sub">Anket sonucu</div><h1>${survey.title}</h1>
       <p class="sub">Kapandı · ${formatTR(survey.closed_at || survey.closes_at)} · ${completed} yanıt (${invited} davetli)</p></div></div>
+    <a class="btn btn-sm btn-soft" href="/sonuc/${survey.result_token}/rapor.pdf">Sonuçları indir (PDF)</a>
     <p class="sub">Ortalama yalnızca 1–5 puanlardan hesaplanır. “Tarzım değil” yanıtları ortalamaya katılmaz.</p>
     ${resultsList(models)}`,
   });

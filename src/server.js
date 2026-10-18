@@ -12,6 +12,7 @@ const { computeResults, resultsCsv, commentsCsv, firstImage } = require('./resul
 const { renderReportPng, appIcon } = require('./gorsel');
 const surum = require('./surum');
 const { resultDraft } = require('./eml');
+const { buildResultPdf } = require('./pdf');
 const { resultEmail } = require('./rapor');
 const surveys = require('./surveys');
 const kirilim = require('./kirilim');
@@ -470,7 +471,22 @@ app.get('/anketler/:id/yorumlar.csv', auth.requireUser, (req, res) => {
 });
 
 // Outlook taslağı: rapor görseli mailin içinde, görsel ve Excel dosyaları ekte, alıcı ve konu dolu.
-app.get('/anketler/:id/sonuc.eml', auth.requireUser, (req, res) => {
+// PDF dosya adı: anket adından, Türkçe karakterler sadeleştirilerek.
+const pdfName = (survey) => `Anket-sonucu-${survey.title.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/ı/g, 'i').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || survey.id}.pdf`;
+
+async function sendPdf(res, survey) {
+  const pdf = await buildResultPdf(computeResults(survey.id));
+  res.type('application/pdf').attachment(pdfName(survey)).send(pdf);
+}
+
+app.get('/anketler/:id/sonuc.pdf', auth.requireUser, async (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey || !survey.published_at) return res.redirect('/anketler');
+  await sendPdf(res, survey);
+});
+
+app.get('/anketler/:id/sonuc.eml', auth.requireUser, async (req, res) => {
   const survey = ownSurvey(req);
   if (!survey || !isClosed(survey)) return res.redirect(`/anketler/${req.params.id}`);
   const results = computeResults(survey.id);
@@ -478,6 +494,7 @@ app.get('/anketler/:id/sonuc.eml', auth.requireUser, (req, res) => {
     results,
     ownerName: req.user.username,
     png: renderReportPng(results),
+    pdf: await buildResultPdf(results),
     csv: { results: resultsCsv(results), comments: commentsCsv(results) },
   });
   markResultOpened(survey.id);
@@ -627,6 +644,12 @@ app.get('/sonuc/:token', (req, res) => {
     return send(res, views.messagePage({ title: 'Sonuç henüz hazır değil', text: `Anket ${formatTR(survey.closes_at)} tarihinde kapanınca sonuçlar burada görünecek.` }));
   }
   send(res, views.publicResultPage({ results: computeResults(survey.id) }));
+});
+
+app.get('/sonuc/:token/rapor.pdf', async (req, res) => {
+  const survey = db.prepare('SELECT * FROM surveys WHERE result_token = ?').get(String(req.params.token));
+  if (!survey || isOpen(survey) || !survey.published_at) return res.redirect(`/sonuc/${encodeURIComponent(req.params.token)}`);
+  await sendPdf(res, survey);
 });
 
 app.use((err, req, res, next) => {

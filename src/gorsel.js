@@ -95,29 +95,41 @@ function modelHeight(m) {
   return 176 + Math.ceil(m.variants.length / VAR_PER_ROW) * (VAR_H + 12) + (m.noPick ? 22 : 4);
 }
 
-function buildReportSvg(results) {
+const HEADER_H = 306;
+const CONT_HEADER_H = 84;
+
+// from/to: çizilecek model aralığı (sıra numarası mutlak kalır). header: tam başlık mı, "devam" başlığı mı.
+// footer: altta sonuç sayfası linki. minHeight: PDF sayfasını doldurmak için en az yükseklik.
+function buildReportSvg(results, { from = 0, to = results.models.length, header = true, footer = true, minHeight = 0 } = {}) {
   clipId = 0;
   const { survey, invited, completed, models } = results;
   const rate = invited ? Math.min(100, Math.round((completed / invited) * 100)) : 0;
   const out = [];
-  let y = 0;
+  let y;
 
-  out.push(text(40, 46, 'Model Beğeni Anketi', { size: 15, weight: 800, fill: C.accent }));
-  out.push(text(40, 78, 'ANKET SONUCU', { size: 13, weight: 800, fill: C.muted }));
-  out.push(text(40, 116, trunc(survey.title, 48), { size: 34, weight: 800 }));
-  out.push(text(40, 144, `Kapanış: ${formatTR(survey.closed_at || survey.closes_at)}`, { size: 15, fill: C.muted }));
-  const tiles = [[`${completed}/${invited}`, 'yanıtlayan'], [`%${rate}`, 'katılım'], [String(models.length), 'model']];
-  tiles.forEach(([big, small], k) => {
-    const x = 40 + k * 312;
-    out.push(`<rect x="${x}" y="166" width="296" height="82" rx="16" fill="${C.card}"/>`);
-    out.push(text(x + 148, 207, big, { size: 30, weight: 800, anchor: 'middle' }));
-    out.push(text(x + 148, 232, small, { size: 14, fill: C.muted, anchor: 'middle' }));
-  });
-  out.push(text(40, 290, 'Model sıralaması', { size: 19, weight: 800 }));
-  out.push(text(960, 290, 'Ortalama yalnızca 1–5 puanlardan; "Tarzım değil" ortalamaya katılmaz', { size: 13, fill: C.muted, anchor: 'end' }));
-  y = 306;
+  if (header) {
+    out.push(text(40, 46, 'Model Beğeni Anketi', { size: 15, weight: 800, fill: C.accent }));
+    out.push(text(40, 78, 'ANKET SONUCU', { size: 13, weight: 800, fill: C.muted }));
+    out.push(text(40, 116, trunc(survey.title, 48), { size: 34, weight: 800 }));
+    out.push(text(40, 144, `Kapanış: ${formatTR(survey.closed_at || survey.closes_at)}`, { size: 15, fill: C.muted }));
+    const tiles = [[`${completed}/${invited}`, 'yanıtlayan'], [`%${rate}`, 'katılım'], [String(models.length), 'model']];
+    tiles.forEach(([big, small], k) => {
+      const x = 40 + k * 312;
+      out.push(`<rect x="${x}" y="166" width="296" height="82" rx="16" fill="${C.card}"/>`);
+      out.push(text(x + 148, 207, big, { size: 30, weight: 800, anchor: 'middle' }));
+      out.push(text(x + 148, 232, small, { size: 14, fill: C.muted, anchor: 'middle' }));
+    });
+    out.push(text(40, 290, 'Model sıralaması', { size: 19, weight: 800 }));
+    out.push(text(960, 290, 'Ortalama yalnızca 1–5 puanlardan; "Tarzım değil" ortalamaya katılmaz', { size: 13, fill: C.muted, anchor: 'end' }));
+    y = HEADER_H;
+  } else {
+    out.push(text(40, 44, trunc(survey.title, 60), { size: 19, weight: 800 }));
+    out.push(text(960, 44, 'Model sıralaması (devam)', { size: 13, fill: C.muted, anchor: 'end' }));
+    y = CONT_HEADER_H - 20;
+  }
 
-  models.forEach((m, i) => {
+  for (let i = from; i < to; i++) {
+    const m = models[i];
     const h = modelHeight(m);
     out.push(`<rect x="30" y="${y}" width="940" height="${h}" rx="18" fill="${C.card}"/>`);
     out.push(modelHead(m, i, y));
@@ -129,20 +141,43 @@ function buildReportSvg(results) {
       if (m.noPick) out.push(text(88, y + h - 10, `${m.noPick} kişi hiçbirini seçmedi`, { size: 13, fill: C.muted }));
     }
     y += h + 14;
-  });
+  }
 
-  out.push(text(40, y + 22, `Yorumlar ve ayrıntılar: ${config.baseUrl}/sonuc/${survey.result_token}`, { size: 13, fill: C.muted }));
-  const height = y + 44;
+  if (footer) out.push(text(40, y + 22, `Yorumlar ve ayrıntılar: ${config.baseUrl}/sonuc/${survey.result_token}`, { size: 13, fill: C.muted }));
+  const height = Math.max(minHeight, y + (footer ? 44 : 10));
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${height}" viewBox="0 0 ${W} ${height}" font-family="Nunito">
     <rect width="${W}" height="${height}" fill="${C.bg}"/>${out.join('')}</svg>`;
 }
 
+const toPng = (svg) => new Resvg(svg, {
+  font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: 'Nunito' },
+  fitTo: { mode: 'width', value: W },
+}).render().asPng();
+
+// PDF için: rapor sayfa yüksekliğine bölünür, bir model kartı iki sayfaya bölünmez.
+function renderReportPages(results, pageHeight) {
+  const { models } = results;
+  const pages = [];
+  let from = 0;
+  let header = true;
+  while (from < models.length || pages.length === 0) {
+    let y = header ? HEADER_H : CONT_HEADER_H - 20;
+    let to = from;
+    while (to < models.length && (to === from || y + modelHeight(models[to]) + 14 + 44 <= pageHeight)) {
+      y += modelHeight(models[to]) + 14;
+      to++;
+    }
+    const last = to >= models.length;
+    pages.push(toPng(buildReportSvg(results, { from, to, header, footer: last, minHeight: pageHeight })));
+    from = to;
+    header = false;
+    if (last) break;
+  }
+  return pages;
+}
+
 function renderReportPng(results) {
-  const resvg = new Resvg(buildReportSvg(results), {
-    font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: 'Nunito' },
-    fitTo: { mode: 'width', value: W },
-  });
-  return resvg.render().asPng();
+  return toPng(buildReportSvg(results));
 }
 
 // Ana ekran simgesi: iki kumaş parçası (giriş ekranındaki gibi), mavi zemin.
@@ -162,4 +197,4 @@ function appIcon(size) {
   return icons[size];
 }
 
-module.exports = { buildReportSvg, renderReportPng, appIcon };
+module.exports = { buildReportSvg, renderReportPng, renderReportPages, appIcon, FONTS };
