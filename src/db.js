@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS surveys (
   test_token     TEXT,                   -- yanıtları kaydetmeyen test linki
   result_token   TEXT,                   -- giriş gerektirmeyen sonuç sayfası
   closed_at      TEXT,
-  result_sent_at TEXT,
+  result_opened_at TEXT,                 -- sonuç maili Outlook'ta ilk açıldığında
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -107,15 +107,6 @@ CREATE TABLE IF NOT EXISTS picks (
   image_id      INTEGER NOT NULL,
   PRIMARY KEY (invitation_id, model_id)
 );
-
--- SMTP ayarlanmadığında giden mailler burada saklanır ve /giden-kutusu sayfasında görünür.
-CREATE TABLE IF NOT EXISTS outbox (
-  id         INTEGER PRIMARY KEY,
-  to_addr    TEXT NOT NULL,
-  subject    TEXT NOT NULL,
-  html       TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
 `);
 
 // Önceki sürümle oluşturulmuş veritabanlarına eksik sütunları ekler.
@@ -124,7 +115,7 @@ function addColumn(table, column, definition) {
   if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 addColumn('models', 'kirilim', 'TEXT');
-for (const col of ['open_days INTEGER', 'open_hour TEXT', 'published_at TEXT', 'public_token TEXT', 'test_token TEXT', 'result_token TEXT']) {
+for (const col of ['result_opened_at TEXT', 'open_days INTEGER', 'open_hour TEXT', 'published_at TEXT', 'public_token TEXT', 'test_token TEXT', 'result_token TEXT']) {
   const [name, type] = col.split(' ');
   addColumn('surveys', name, type);
 }

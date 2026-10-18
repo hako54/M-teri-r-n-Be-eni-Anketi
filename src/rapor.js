@@ -1,29 +1,9 @@
-const nodemailer = require('nodemailer');
+// Görselli sonuç raporu (HTML). Kullanıcı bunu panoya kopyalayıp Outlook'taki sonuç mailine yapıştırır;
+// mail tablolarla ve satır içi stillerle yazıldı, çünkü Outlook başka biçimlendirmeyi düşürür.
 const config = require('./config');
-const { db } = require('./db');
 const { html, raw, esc } = require('./html');
 const { formatTR } = require('./time');
 const { formatAvg } = require('./results');
-
-const smtpReady = Boolean(config.mail.host);
-
-const transport = smtpReady
-  ? nodemailer.createTransport({
-    host: config.mail.host,
-    port: config.mail.port,
-    secure: config.mail.secure,
-    auth: config.mail.user ? { user: config.mail.user, pass: config.mail.pass } : undefined,
-  })
-  : null;
-
-// SMTP yoksa mail gönderilmez; giden kutusu tablosuna yazılır ve uygulamada görüntülenir.
-async function sendMail({ to, subject, html: body, attachments }) {
-  if (!transport) {
-    db.prepare('INSERT INTO outbox (to_addr, subject, html) VALUES (?, ?, ?)').run(to, subject, body);
-    return { stored: true };
-  }
-  return transport.sendMail({ from: config.mail.from, to, subject, html: body, attachments });
-}
 
 const C = { bg: '#EAF4FF', card: '#FFFFFF', ink: '#22385A', muted: '#6A80A3', accent: '#4C9AFF', soft: '#DDEBFF' };
 
@@ -34,7 +14,7 @@ function shell(title, inner) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
 <tr><td style="padding:0 4px 14px;font-size:13px;font-weight:700;color:${C.accent}">Model Beğeni Anketi</td></tr>
 ${inner}
-<tr><td style="padding:18px 4px 0;font-size:11px;color:${C.muted}">Bu mail Model Beğeni Anketi sistemi tarafından otomatik gönderildi.</td></tr>
+<tr><td style="padding:18px 4px 0;font-size:11px;color:${C.muted}">Bu rapor Model Beğeni Anketi uygulamasında hazırlandı.</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
@@ -102,9 +82,9 @@ function resultEmail(results) {
   const list = html`
     <div style="font-size:15px;font-weight:800;margin-bottom:4px">Model sıralaması</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
-    <div style="font-size:12px;color:${C.muted};margin-top:12px">Ekte Excel ile açılabilen sonuç ve yorum dosyaları var. Ayrıntılar: ${config.baseUrl}/sonuc/${survey.result_token}</div>`;
+    <div style="font-size:12px;color:${C.muted};margin-top:12px">Ayrıntılı ve güncel sonuçlar: ${config.baseUrl}/sonuc/${survey.result_token}</div>`;
 
   return shell(`Sonuç: ${survey.title}`, card(summary.toString()) + card(list.toString(), 18));
 }
 
-module.exports = { sendMail, resultEmail, smtpReady };
+module.exports = { resultEmail };

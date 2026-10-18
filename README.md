@@ -1,6 +1,6 @@
 # Model Beğeni Anketi
 
-Model görsellerini yükleyip mail ile beğeni anketi gönderen, süre dolunca sonucu otomatik mail atan web uygulaması. Telefon ve bilgisayarda çalışır.
+Model görsellerini yükleyip beğeni anketi yapan web uygulaması. Davet ve sonuç mailleri anketi oluşturan kişinin kendi Outlook'undan gider; uygulama sunucudan mail göndermez, bu yüzden mail sunucusu izni gerekmez. Telefon ve bilgisayarda çalışır.
 
 ## Neler yapar
 
@@ -12,7 +12,8 @@ Model görsellerini yükleyip mail ile beğeni anketi gönderen, süre dolunca s
 - **Taslak:** "Taslak olarak kaydet" ile kaydedilen anket sonra "Gönder" ile canlıya alınır. Gönderilmeyen taslaklar 7 gün sonra otomatik silinir.
 - **Test linki (yalnızca admin):** Admin, anketi canlıya almadan önce katılımcının göreceği şekilde dener; test yanıtları kaydedilmez. Adminler `ADMIN_EMAILS` ayarındaki adreslerle kayıtlı kullanıcılardır.
 - **Katılımcı ekranı:** Telefonda modeller tek tek gösterilir. Her model için 1–5 puan **veya "Tarzım değil"** seçilir (ortalamaya katılmaz); isteğe bağlı yorum yazılır.
-- **Sonuç:** Bitiş günü ve saatinde anket kendiliğinden kapanır. Sonuç sayfası ve "Sonucu Outlook ile paylaş" düğmesi açılır; giriş gerektirmeyen bir sonuç linki paylaşılır. Mail sunucusu (SMTP) ayarlanırsa sonuç maili kapanış anında otomatik de gider.
+- **Kapanış hatırlatıcısı:** Canlıdaki anket sayfasından kapanış anı için Outlook takvimine hatırlatıcı (.ics) eklenir; hatırlatıcıdaki link sonuç maili sayfasını açar.
+- **Sonuç:** Bitiş günü ve saatinde anket kendiliğinden kapanır. "Raporu kopyala ve Outlook'u aç" düğmesi görselli raporu panoya kopyalar ve Outlook'u "Sonuç kime gelsin?" alıcılarıyla açar; rapor mail gövdesine yapıştırılır. Mailde ayrıca giriş gerektirmeyen sonuç sayfası linki bulunur. Sonucu henüz gönderilmemiş anketler listede "Sonucu gönder" ile işaretlenir.
 
 ## Kırılım listesini güncelleme / yeni başlık ekleme
 
@@ -36,7 +37,7 @@ npm start          # http://localhost:3000
 npm test           # uçtan uca akış testi
 ```
 
-Davetler sunucudan değil, kullanıcının Outlook'undan gider. Mail sunucusu (SMTP) ayarlanmadıysa otomatik sonuç mailleri gönderilmez, uygulamadaki **/giden-kutusu** sayfasına yazılır.
+Uygulama mail göndermez: davet, test ve sonuç mailleri `mailto:` linkleriyle kullanıcının cihazındaki mail uygulamasında (Outlook) hazır açılır ve kullanıcı kendi hesabından gönderir. Outlook'un açılması için cihazda varsayılan mail uygulaması Outlook olmalıdır.
 
 ## Ayarlar
 
@@ -48,12 +49,10 @@ Davetler sunucudan değil, kullanıcının Outlook'undan gider. Mail sunucusu (S
 | `DATA_DIR` | Veritabanı ve görsellerin klasörü. Sunucuda **kalıcı disk** olmalı. |
 | `REGISTRATION_CODE` | Doluysa yalnızca bu kodu bilenler hesap açabilir. |
 | `ADMIN_EMAILS` | Admin kullanıcıların e-postaları (noktalı virgül veya virgülle). Test linkini yalnızca onlar görür. |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Şirket mail sunucusu (Office 365, Google Workspace vb.) veya bir mail servisi (SendGrid, Resend, Brevo). |
-| `MAIL_FROM` | Gönderen adı ve adresi. |
 
 ## Yayına alma
 
-Tek bir Node.js servisi ve kalıcı bir disk yeterli (örneğin Railway, Render ya da kendi sunucunuz). `DATA_DIR` kalıcı diske bakmalı; aksi halde her yeniden başlatmada veriler silinir. Zamanlayıcı uygulamanın içinde çalışır ve her 30 saniyede süresi dolan anketleri kontrol eder. Uygulama kapalıyken süresi dolan bir anketin sonucu, uygulama açılır açılmaz gönderilir.
+Tek bir Node.js servisi ve kalıcı bir disk yeterli (örneğin Railway, Render ya da kendi sunucunuz). `DATA_DIR` kalıcı diske bakmalı; aksi halde her yeniden başlatmada veriler silinir. Zamanlayıcı uygulamanın içinde çalışır; her 30 saniyede süresi dolan anketleri kapatır ve süresi geçen taslakları siler.
 
 ## Yapı
 
@@ -62,7 +61,9 @@ src/server.js     rotalar (hesap, modeller, anketler, katılımcı linki)
 src/db.js         SQLite tabloları
 src/surveys.js    anket oluşturma, davet gönderimi, zamanlayıcı
 src/results.js    ortalama, sıralama, CSV
-src/mail.js       mail gönderimi ve mail şablonları
+src/outlook.js    Outlook (mailto) linkleri ve takvim hatırlatıcısı
+src/rapor.js      görselli sonuç raporu (Outlook'a yapıştırılır)
+src/kirilim.js    alt kırılımlı ürün grupları
 src/views.js      sayfalar
 public/           stil ve küçük tarayıcı betikleri
 test/             uçtan uca test

@@ -1,7 +1,6 @@
 const crypto = require('node:crypto');
 const { db, tx, modelCode } = require('./db');
-const { computeResults, resultsCsv, commentsCsv, firstImage } = require('./results');
-const { sendMail, resultEmail } = require('./mail');
+const { firstImage } = require('./results');
 const { closesAt } = require('./time');
 
 const newToken = () => crypto.randomBytes(16).toString('base64url');
@@ -73,21 +72,9 @@ function submitResponses(invitationId, answers) {
   });
 }
 
-// Anketi kapatır ve sonuç mailini gönderir. Gönderim başarısız olursa bir sonraki turda yeniden dener.
-async function closeAndReport(surveyId) {
-  db.prepare('UPDATE surveys SET closed_at = COALESCE(closed_at, ?) WHERE id = ?').run(new Date().toISOString(), surveyId);
-  const results = computeResults(surveyId);
-  const to = results.survey.result_emails.split(',').filter(Boolean);
-  await sendMail({
-    to: to.join(', '),
-    subject: `Anket sonucu: ${results.survey.title}`,
-    html: resultEmail(results),
-    attachments: [
-      { filename: 'sonuclar.csv', content: resultsCsv(results), contentType: 'text/csv; charset=utf-8' },
-      { filename: 'yorumlar.csv', content: commentsCsv(results), contentType: 'text/csv; charset=utf-8' },
-    ],
-  });
-  db.prepare('UPDATE surveys SET result_sent_at = ? WHERE id = ?').run(new Date().toISOString(), surveyId);
+// Anketi kapatır. Sonuç maili sunucudan gitmez; oluşturan kişi kendi Outlook'undan gönderir.
+function closeSurvey(surveyId, now = new Date()) {
+  db.prepare('UPDATE surveys SET closed_at = COALESCE(closed_at, ?) WHERE id = ?').run(now.toISOString(), surveyId);
 }
 
 // Gönderilmeyen taslaklar bu süreden sonra silinir.
@@ -103,24 +90,14 @@ function deleteExpiredDrafts(now = new Date()) {
   return db.prepare('DELETE FROM surveys WHERE published_at IS NULL AND created_at <= ?').run(cutoff).changes;
 }
 
-let running = false;
-async function tick(now = new Date()) {
-  if (running) return;
-  running = true;
+function tick(now = new Date()) {
   try {
     deleteExpiredDrafts(now);
-    const due = db.prepare(`SELECT id FROM surveys WHERE published_at IS NOT NULL AND result_sent_at IS NULL
-      AND (closes_at <= ? OR closed_at IS NOT NULL)`)
+    const due = db.prepare('SELECT id FROM surveys WHERE published_at IS NOT NULL AND closed_at IS NULL AND closes_at <= ?')
       .all(now.toISOString());
-    for (const { id } of due) {
-      try {
-        await closeAndReport(id);
-      } catch (err) {
-        console.error(`Anket ${id} sonucu gönderilemedi:`, err.message);
-      }
-    }
-  } finally {
-    running = false;
+    for (const { id } of due) closeSurvey(id, now);
+  } catch (err) {
+    console.error('Zamanlayıcı hatası:', err.message);
   }
 }
 
@@ -129,4 +106,4 @@ function startScheduler(intervalMs = 30000) {
   return setInterval(tick, intervalMs);
 }
 
-module.exports = { DRAFT_DAYS, draftExpiresAt, deleteExpiredDrafts, parseEmails, createSurvey, publishSurvey, joinSurvey, surveyModels, submitResponses, closeAndReport, tick, startScheduler };
+module.exports = { DRAFT_DAYS, draftExpiresAt, deleteExpiredDrafts, parseEmails, createSurvey, publishSurvey, joinSurvey, surveyModels, submitResponses, closeSurvey, tick, startScheduler };

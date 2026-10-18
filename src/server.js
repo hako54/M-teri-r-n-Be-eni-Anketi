@@ -9,7 +9,7 @@ const auth = require('./auth');
 const views = require('./views');
 const { closesAt, formatTR } = require('./time');
 const { computeResults, resultsCsv, firstImage } = require('./results');
-const { smtpReady } = require('./mail');
+const { resultEmail } = require('./rapor');
 const surveys = require('./surveys');
 const kirilim = require('./kirilim');
 const outlook = require('./outlook');
@@ -256,10 +256,9 @@ app.get('/anketler/:id', auth.requireUser, (req, res) => {
   if (!survey) return res.redirect('/anketler');
   const flashes = {
     taslak: 'Anket taslak olarak kaydedildi. Hazır olduğunuzda “Gönder” ile canlıya alın.',
-    yayinda: 'Anket canlıda. Outlook açıldıysa maili kontrol edip gönderin; açılmadıysa “Outlook’ta aç” düğmesini kullanın.',
+    yayinda: 'Anket canlıda. Outlook açıldıysa maili kontrol edip gönderin. Kapanışta sonucu göndermeyi unutmamak için hatırlatıcıyı takviminize ekleyin.',
     gecmis: 'Bitiş zamanı geçmişte kalıyor. Anketi yeniden oluşturun ya da daha uzun süre seçin.',
-    kapatildi: 'Anket kapatıldı, sonuç hazır.',
-    hata: 'Sonuç maili gönderilemedi. Sistem birkaç dakika içinde tekrar deneyecek.',
+    kapatildi: 'Anket kapatıldı. Sonucu aşağıdan Outlook ile gönderebilirsiniz.',
   };
   const results = computeResults(survey.id);
   const owner = { name: req.user.username, email: req.user.email };
@@ -269,7 +268,7 @@ app.get('/anketler/:id', auth.requireUser, (req, res) => {
     draftExpiresAt: surveys.draftExpiresAt(survey),
     results,
     invitations: db.prepare('SELECT * FROM invitations WHERE survey_id = ? ORDER BY completed_at IS NULL, invited DESC, email').all(survey.id),
-    smtpReady,
+    resultHtml: survey.closed_at || (survey.published_at && new Date(survey.closes_at) <= new Date()) ? resultEmail(results) : null,
     flash: flashes[req.query.m],
     autoOpenOutlook: req.query.m === 'yayinda',
     links: {
@@ -294,16 +293,27 @@ app.post('/anketler/:id/yayinla', auth.requireUser, (req, res) => {
   res.redirect(`/anketler/${survey.id}?m=${closes ? 'yayinda' : 'gecmis'}`);
 });
 
-app.post('/anketler/:id/kapat', auth.requireUser, async (req, res) => {
+app.post('/anketler/:id/kapat', auth.requireUser, (req, res) => {
   const survey = ownSurvey(req);
   if (!survey || !survey.published_at) return res.redirect('/anketler');
-  try {
-    await surveys.closeAndReport(survey.id);
-    res.redirect(`/anketler/${survey.id}?m=kapatildi`);
-  } catch (err) {
-    console.error(err);
-    res.redirect(`/anketler/${survey.id}?m=hata`);
-  }
+  surveys.closeSurvey(survey.id);
+  res.redirect(`/anketler/${survey.id}?m=kapatildi`);
+});
+
+// Sonuç maili Outlook'ta açıldı: listede "Sonucu gönder" uyarısı kalkar.
+app.post('/anketler/:id/sonuc-acildi', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (survey) db.prepare('UPDATE surveys SET result_opened_at = COALESCE(result_opened_at, ?) WHERE id = ?').run(new Date().toISOString(), survey.id);
+  res.status(204).end();
+});
+
+// Outlook takvimi için kapanış hatırlatıcısı; içindeki link sonuç gönderme sayfasını açar.
+app.get('/anketler/:id/hatirlatici.ics', auth.requireUser, (req, res) => {
+  const survey = ownSurvey(req);
+  if (!survey || !survey.published_at) return res.redirect('/anketler');
+  res.type('text/calendar; charset=utf-8')
+    .attachment(`anket-${survey.id}-kapanis.ics`)
+    .send(outlook.closingReminderIcs({ survey, url: `${config.baseUrl}/anketler/${survey.id}` }));
 });
 
 app.get('/anketler/:id/sonuclar.csv', auth.requireUser, (req, res) => {
@@ -434,16 +444,6 @@ app.get('/sonuc/:token', (req, res) => {
   send(res, views.publicResultPage({ results: computeResults(survey.id) }));
 });
 
-// ---------- Giden kutusu (SMTP yokken) ----------
-app.get('/giden-kutusu', auth.requireUser, (req, res) => {
-  send(res, views.outboxPage({ user: req.user, mails: db.prepare('SELECT id, to_addr, subject, created_at FROM outbox ORDER BY id DESC LIMIT 200').all() }));
-});
-app.get('/giden-kutusu/:id', auth.requireUser, (req, res) => {
-  const mail = db.prepare('SELECT * FROM outbox WHERE id = ?').get(Number(req.params.id) || 0);
-  if (!mail) return res.redirect('/giden-kutusu');
-  res.type('html').send(mail.html);
-});
-
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     const text = err.code === 'LIMIT_FILE_SIZE' ? 'Bir görsel 20 MB sınırını aşıyor.' : 'Görseller yüklenemedi.';
@@ -456,7 +456,6 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   app.listen(config.port, () => {
     console.log(`Model Beğeni Anketi çalışıyor: ${config.baseUrl}`);
-    if (!smtpReady) console.log('SMTP ayarlı değil: mailler /giden-kutusu sayfasına yazılacak.');
     surveys.startScheduler();
   });
 }

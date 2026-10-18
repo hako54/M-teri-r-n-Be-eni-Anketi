@@ -58,6 +58,7 @@ function resultMailto({ results, to }) {
     models.length > 15 ? `… ve ${models.length - 15} model daha` : '',
     '',
     `Görselli sonuç raporu: ${config.baseUrl}/sonuc/${survey.result_token}`,
+    '',
   ].join('\n');
   return build({ to, subject: `Anket sonucu: ${survey.title}`, body });
 }
@@ -75,4 +76,39 @@ function testMailto({ survey, link, to }) {
   });
 }
 
-module.exports = { inviteMailto, resultMailto, testMailto };
+function icsText(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+
+const icsDate = (iso) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+// Kapanış anında hatırlatan takvim etkinliği (Outlook, telefon ve bilgisayar takvimleri açar).
+function closingReminderIcs({ survey, url }) {
+  const start = icsDate(survey.closes_at);
+  const end = icsDate(new Date(new Date(survey.closes_at).getTime() + 15 * 60000).toISOString());
+  const text = `"${survey.title}" anketi kapandı. Sonuç mailini göndermek için açın: ${url}`;
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Model Begeni Anketi//TR',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:anket-${survey.id}-${survey.public_token}@model-begeni-anketi`,
+    `DTSTAMP:${icsDate(new Date().toISOString())}`,
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    `SUMMARY:${icsText(`Anket sonucu: ${survey.title}`)}`,
+    `DESCRIPTION:${icsText(text)}`,
+    `URL:${url}`,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'TRIGGER:PT0M',
+    `DESCRIPTION:${icsText(text)}`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
+module.exports = { inviteMailto, resultMailto, testMailto, closingReminderIcs };

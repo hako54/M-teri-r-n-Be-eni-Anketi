@@ -6,13 +6,13 @@ const path = require('node:path');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'anket-test-'));
 process.env.ADMIN_EMAILS = 'Ayse@Firma.com.tr; diger.admin@firma.com.tr';
-delete process.env.SMTP_HOST;
 
 const app = require('../src/server');
 const { db } = require('../src/db');
 const surveys = require('../src/surveys');
 const kirilim = require('../src/kirilim');
 const { computeResults } = require('../src/results');
+const { resultEmail } = require('../src/rapor');
 const { closesAt } = require('../src/time');
 
 // 1x1 PNG
@@ -135,6 +135,11 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   r = await anon('GET', `/sonuc/${survey.result_token}`);
   assert.match(r.text, /Sonuç henüz hazır değil/);
 
+  r = await admin('GET', `/anketler/${surveyId}/hatirlatici.ics`);
+  assert.match(r.text, /BEGIN:VEVENT/);
+  assert.ok(r.text.includes(`DTSTART:${survey.closes_at.replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`));
+  assert.ok(r.text.includes(`/anketler/${surveyId}`));
+
   db.prepare('UPDATE surveys SET closes_at = ? WHERE id = ?').run(new Date(Date.now() - 1000).toISOString(), surveyId);
   await surveys.tick();
   assert.ok(db.prepare('SELECT closed_at FROM surveys WHERE id = ?').get(surveyId).closed_at);
@@ -145,8 +150,7 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   assert.strictEqual(results.models[0].avg, 4.5);
   assert.strictEqual(results.models[1].avg, 2);
 
-  const mail = db.prepare("SELECT * FROM outbox WHERE subject = 'Anket sonucu: Yaz 2027'").get();
-  assert.ok(mail.html.includes(`/sonuc/${survey.result_token}`));
+  assert.ok(resultEmail(results).includes(`/sonuc/${survey.result_token}`));
 
   r = await anon('GET', `/a/${disaridan}`);
   assert.match(r.text, /Anket kapandı/);
@@ -154,9 +158,17 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   assert.match(r.text, /Rengi çok güzel/);
   assert.match(r.text, /4,5/);
 
+  r = await admin('GET', '/anketler');
+  assert.match(r.text, /Sonucu gönder/);
   r = await admin('GET', `/anketler/${surveyId}`);
-  assert.match(r.text, /Sonucu Outlook ile paylaş/);
+  assert.match(r.text, /Raporu kopyala ve Outlook'u aç/);
+  assert.match(r.text, /data-then="mailto:ayse%40firma.com.tr\?subject=Anket%20sonucu%3A%20Yaz%202027/);
+  assert.match(r.text, /<textarea id="rapor" hidden>&lt;!doctype html&gt;/, 'görselli rapor kopyalanmaya hazır');
   assert.match(r.text, /Linkle katıldı/);
+  r = await admin('POST', `/anketler/${surveyId}/sonuc-acildi`);
+  assert.strictEqual(r.status, 204);
+  r = await admin('GET', '/anketler');
+  assert.doesNotMatch(r.text, /Sonucu gönder/);
 
   r = await admin('GET', `/anketler/${surveyId}/sonuclar.csv`);
   assert.match(r.text, /Marka Müdürlükleri;Gelecek Dönem Buyer Grup;Gelecek Dönem Merch Alt Grup Kod;Gelecek Dönem Ürün Klasman/);
@@ -248,9 +260,9 @@ test('A/B testi: seçenekler ayrı puanlanır, koleksiyon tercihi kazananı beli
   assert.match(r.text, /Ekose renkleri;B;Yeşil-bej;3,7;3;0;0;1;0;1;1;2;Evet/);
 
   await admin('POST', `/anketler/${surveyId}/kapat`);
-  const mail = db.prepare("SELECT * FROM outbox WHERE subject = 'Anket sonucu: Ekose testi'").get();
-  assert.match(mail.html, /B ✓/);
-  assert.match(mail.html, /1 kişi hiçbirini seçmedi/);
+  const rapor = resultEmail(computeResults(surveyId));
+  assert.match(rapor, /B ✓/);
+  assert.match(rapor, /1 kişi hiçbirini seçmedi/);
 });
 
 test('giriş yapmadan yönetim sayfaları açılmaz', async () => {

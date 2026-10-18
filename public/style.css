@@ -257,3 +257,4 @@ select:disabled { opacity: .55; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .actions .btn { flex: 1 1 220px; }
 .warn-note { color: var(--warn); font-size: .82rem; font-weight: 700; margin: 0; }
+.result-mail.pending { outline: 3px solid var(--accent); outline-offset: -3px; }

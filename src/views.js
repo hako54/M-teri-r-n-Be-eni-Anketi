@@ -153,7 +153,7 @@ function surveysPage({ user, surveys }) {
   const status = (s) => ({
     taslak: html`<span class="pill wait">Taslak</span>`,
     acik: html`<span class="pill open">Canlıda</span>`,
-    kapali: html`<span class="pill done">Kapandı</span>`,
+    kapali: s.result_opened_at ? html`<span class="pill done">Kapandı</span>` : html`<span class="pill wait">Sonucu gönder</span>`,
   })[surveyState(s)];
   return layout({
     title: 'Anketler', user, active: 'anketler',
@@ -249,7 +249,7 @@ function resultsList(models) {
     </div>`;
 }
 
-function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, smtpReady, flash, autoOpenOutlook, links, invite, invitedEmails, resultMailto }) {
+function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, resultHtml, flash, autoOpenOutlook, links, invite, invitedEmails, resultMailto }) {
   const { survey, invited, completed, models } = results;
   const state = surveyState(survey);
   const rate = invited ? Math.min(100, Math.round((completed / invited) * 100)) : 0;
@@ -284,6 +284,8 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, smt
             <button type="button" class="btn btn-sm btn-soft" data-copy="mailbody">Metni kopyala</button></label>` : ''}
         </div>
       </details>
+      <a class="btn btn-soft" href="/anketler/${survey.id}/hatirlatici.ics">Kapanış hatırlatıcısını takvime ekle</a>
+      <p class="sub small">Hatırlatıcı ${formatTR(survey.closes_at)}'de Outlook takviminizde çıkar; içindeki link sonuç maili sayfasını açar.</p>
       ${copyField('katilimlink', 'Katılımcı linki', links.public)}
       ${isAdmin ? copyField('testlink', 'Test linki (yalnızca admin, yanıt kaydetmez)', links.test, 'Testi aç') : ''}
     </div>`;
@@ -297,16 +299,21 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, smt
     ${flash ? html`<div class="ok">${flash}</div>` : ''}
     ${state === 'taslak' ? draftPanel : ''}
     ${state === 'acik' ? livePanel : ''}
+    ${state === 'kapali' ? html`<div class="card stack result-mail ${survey.result_opened_at ? '' : 'pending'}">
+      <div class="label">Sonuç maili ${survey.result_opened_at ? html`<span class="pill done">Outlook'ta açıldı</span>` : ''}</div>
+      <p class="sub">Mail sizin Outlook hesabınızdan <b>${survey.result_emails.replace(/,/g, ', ')}</b> adresine gider. Düğmeye basınca görselli rapor panoya kopyalanır ve Outlook açılır; mailin gövdesine tıklayıp <b>yapıştırın</b> (Ctrl+V, telefonda uzun basıp Yapıştır).</p>
+      <button type="button" class="btn outlook" id="sonuc-gonder" data-copy-html="rapor" data-then="${resultMailto}" data-ping="/anketler/${survey.id}/sonuc-acildi">Raporu kopyala ve Outlook'u aç</button>
+      <p class="sub small">Yapıştırmasanız da mailde sonuç özeti ve görselli rapor linki bulunur.</p>
+      <textarea id="rapor" hidden>${resultHtml || ''}</textarea>
+      ${copyField('sonuclink', 'Sonuç sayfası (giriş gerektirmez)', links.result, 'Aç')}
+    </div>` : ''}
     ${state !== 'taslak' ? html`<div class="stats">
       <div class="card stat"><div class="ring" style="--p:${rate}"><b>%${rate}</b></div><div><b>${completed} / ${invited}</b><div class="sub">davetli yanıtladı</div></div></div>
       <div class="card stat-actions">
         ${state === 'acik' ? html`<form method="post" action="/anketler/${survey.id}/kapat"><button class="btn btn-sm">Şimdi kapat</button></form>` : ''}
-        ${state === 'kapali' ? html`<a class="btn btn-sm outlook" href="${resultMailto}">Sonucu Outlook ile paylaş</a>` : ''}
         <a class="btn btn-sm btn-soft" href="/anketler/${survey.id}/sonuclar.csv">Sonuçları indir (Excel)</a>
       </div>
     </div>` : ''}
-    ${state === 'kapali' ? html`<div class="card stack">${copyField('sonuclink', 'Sonuç sayfası (giriş gerektirmez)', links.result, 'Aç')}
-      <p class="sub">${smtpReady ? (survey.result_sent_at ? `Sonuç maili ${survey.result_emails.replace(/,/g, ', ')} adresine otomatik gönderildi.` : 'Sonuç maili gönderiliyor.') : `Sonuç ${survey.result_emails.replace(/,/g, ', ')} adresine “Sonucu Outlook ile paylaş” ile gönderilir.`}</p></div>` : ''}
     ${state !== 'taslak' ? html`
     <h2>Sonuçlar ${state === 'acik' ? html`<span class="sub">· anlık</span>` : ''}</h2>
     <p class="sub">Ortalama yalnızca 1–5 puanlardan hesaplanır. “Tarzım değil” yanıtları ortalamaya katılmaz.</p>
@@ -417,17 +424,7 @@ function messagePage({ title, text, link }) {
   });
 }
 
-function outboxPage({ user, mails }) {
-  return layout({
-    title: 'Giden kutusu', user,
-    body: html`
-    <div class="head"><div><h1>Giden kutusu</h1><p class="sub">Mail sunucusu ayarlı olmadığı için otomatik sonuç mailleri burada birikir.</p></div></div>
-    <div class="list">${mails.map((m) => html`<a class="row card" href="/giden-kutusu/${m.id}"><div class="row-main"><b>${m.subject}</b><span class="sub">${m.to_addr} · ${formatTR(m.created_at.replace(' ', 'T') + 'Z')}</span></div></a>`)}</div>
-    ${!mails.length ? html`<p class="empty">Henüz mail yok.</p>` : ''}`,
-  });
-}
-
 module.exports = {
   authPage, modelsPage, modelFormPage, surveysPage, newSurveyPage, surveyDetailPage,
-  participantPage, joinPage, publicResultPage, messagePage, outboxPage, raw,
+  participantPage, joinPage, publicResultPage, messagePage, raw,
 };
