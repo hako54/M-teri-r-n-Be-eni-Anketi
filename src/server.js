@@ -595,6 +595,7 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   app.listen(config.port, () => {
     console.log(`Model Beğeni Anketi çalışıyor: ${config.baseUrl}`);
+    console.log(`Yedek depolama alanı: ${s3.enabled() ? 'açık' : 'kapalı (yalnızca diske yedeklenir)'}`);
     surveys.startScheduler();
     yedek.backupIfDue();
     setInterval(() => yedek.backupIfDue(), 60000);

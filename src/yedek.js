@@ -64,6 +64,7 @@ async function runBackup(now = new Date()) {
     }
   }
   db.prepare('INSERT INTO backups (day, file, size, remote) VALUES (?, ?, ?, ?)').run(day, file, size, remote);
+  console.log(`Yedek alındı: ${file} (${Math.round(size / 1024)} KB), depolama alanı: ${remote}`);
   return { day, file, size, remote };
 }
 
