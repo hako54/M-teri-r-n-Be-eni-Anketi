@@ -170,6 +170,7 @@ function modelsPage({ user, models, q, marka, markas = [] }) {
     title: 'Modeller', user, active: 'modeller',
     body: html`
     <div class="head">
+      <div class="head-actions"><a class="btn btn-sm" href="/anketler/yeni">Anket oluştur</a></div>
       <div><h1>Modellerim</h1><p class="sub">${models.length} model${models[0] && !filtered ? ` · son eklenen ${modelCode(models[0].id)}` : ''}</p></div>
       <form class="search" method="get">
         <input id="q" name="q" placeholder="Numara, kumaş, içerik, grup ara" value="${q || ''}">
@@ -209,7 +210,7 @@ function kirilimFields(value) {
   <script src="/static/kirilim.js"></script>`;
 }
 
-function modelFormPage({ user, model, images = [], nextCode, values = {}, errs }) {
+function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, added, saved }) {
   const isNew = !model;
   const v = model || values;
   return layout({
@@ -219,6 +220,13 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs }
     <div class="head"><div><h1>${isNew ? 'Yeni model' : modelCode(model.id)}</h1>
       <p class="sub">${isNew ? html`Kaydedince <b>${nextCode}</b> numarası verilecek.` : `Eklenme: ${formatTR(model.created_at.replace(' ', 'T') + 'Z')}`}</p></div></div>
     ${errors(errs)}
+    ${added || saved ? html`<div class="card next-step">
+      <div><b>${modelCode(model.id)} ${added ? 'eklendi' : 'kaydedildi'}.</b><p class="sub">Bu modelle anket oluşturabilir ya da başka bir model ekleyebilirsiniz.</p></div>
+      <div class="actions">
+        <a class="btn" href="/anketler/yeni?model=${model.id}">Ankete ilerle</a>
+        <a class="btn btn-soft" href="/modeller/yeni">Yeni model ekle</a>
+      </div>
+    </div>` : ''}
     <form class="stack" method="post" enctype="multipart/form-data" action="${isNew ? '/modeller' : `/modeller/${model.id}`}">
     ${!isNew && images.length ? html`<div class="card"><div class="label">Görseller</div><div class="img-grid">
       ${images.map((im) => html`<div class="img-cell">${thumb(im.filename)}<span class="no">${im.letter}</span>
@@ -241,7 +249,10 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs }
       <label class="field"><span>Ana kumaş</span><input id="ana_kumas" name="ana_kumas" required maxlength="120" placeholder="ör. Viskon krep" value="${v.ana_kumas || ''}"></label>
       <label class="field"><span>İçerik</span><input id="icerik" name="icerik" required maxlength="200" placeholder="ör. %100 Viskon" value="${v.icerik || ''}"></label>
       ${kirilimFields(v.kirilim)}
-      <button class="btn">${isNew ? 'Modeli kaydet' : 'Değişiklikleri kaydet'}</button>
+      <div class="actions">
+        <button class="btn">${isNew ? 'Modeli kaydet' : 'Değişiklikleri kaydet'}</button>
+        <button class="btn btn-soft" name="next" value="anket">Kaydet ve ankete ilerle</button>
+      </div>
     </div>
     </form>
     <script src="/static/onizleme.js"></script>`,

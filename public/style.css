@@ -21,6 +21,7 @@
   --font: "Nunito", "Segoe UI", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; min-height: 100vh; font-family: var(--font); font-size: 16px; line-height: 1.5; color: var(--ink);
@@ -280,3 +281,23 @@ select:disabled { opacity: .55; }
 .admin-badge { align-self: center; background: #0F3A6E; color: #fff; font-weight: 800; letter-spacing: .18em; font-size: .8rem; padding: 8px 18px; border-radius: 999px; margin-bottom: 6px; }
 .auth-admin { background: var(--card); border-radius: var(--r); padding: 26px 20px; box-shadow: var(--shadow); border-top: 6px solid #0F3A6E; }
 .muted-link { color: var(--muted); font-weight: 700; }
+.next-step { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; border: 2px solid var(--accent); }
+.next-step p { margin: 2px 0 0; }
+.next-step .actions { flex: 1 1 260px; }
+.head-actions { order: 2; }
+
+/* aranabilir kırılım listesi */
+.native-hidden { position: absolute !important; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.combo { position: relative; }
+.combo-btn { width: 100%; text-align: left; background: #fff; border: 2px solid transparent; border-radius: 14px; padding: 11px 38px 11px 14px; cursor: pointer; font-weight: 600; position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-btn::after { content: ""; position: absolute; right: 16px; top: 50%; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: translateY(-70%) rotate(45deg); }
+.combo-btn.placeholder { color: var(--muted); font-weight: 400; }
+.combo-btn:disabled { opacity: .55; cursor: not-allowed; }
+.combo-btn[aria-expanded="true"] { border-color: var(--accent); }
+.combo-panel { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border-radius: 14px; box-shadow: 0 12px 30px -10px rgba(34, 56, 90, .35); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.combo-search { border: 2px solid var(--accent) !important; background: #fff !important; padding: 9px 12px !important; border-radius: 10px !important; }
+.combo-list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; }
+.combo-list li { padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: .92rem; }
+.combo-list li.active { background: var(--soft); }
+.combo-list li[aria-selected="true"] { font-weight: 800; color: var(--accent-ink); }
+.combo-empty { color: var(--muted); font-size: .88rem; padding: 6px 10px; }

@@ -51,6 +51,8 @@ async function addModel(req, { kumas, icerik, k = [], ab, konu, labels }) {
   return req('POST', '/modeller', fd);
 }
 
+const modelIdFrom = (r) => Number(r.location.match(/modeller\/(\d+)/)[1]);
+
 function surveyBody({ title, models, emails, action }) {
   const body = new URLSearchParams({ title, emails, days: '3', hour: '18:00', result_emails: 'ayse@firma.com.tr', action });
   models.forEach((id) => body.append('models', String(id)));
@@ -100,12 +102,24 @@ test('kırılım: Excel başlıkları ve alt kırılımlar', async () => {
 test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   let r = await addModel(admin, { kumas: 'Viskon krep', icerik: '%100 Viskon', k: BEBEK });
   assert.strictEqual(r.status, 302, r.text);
-  const m1 = Number(r.location.split('/').pop());
+  const m1 = modelIdFrom(r);
   r = await addModel(admin, { kumas: 'Denim', icerik: '%98 Pamuk %2 Elastan', k: [BEBEK[0], 'OLMAYAN'] });
   assert.strictEqual(r.status, 400);
   assert.match(r.text, /Kırılım seçimi listede bulunamadı/);
   r = await addModel(admin, { kumas: 'Denim', icerik: '%98 Pamuk %2 Elastan' });
-  const m2 = Number(r.location.split('/').pop());
+  const m2 = modelIdFrom(r);
+
+  r = await admin('GET', `/modeller/${m1}?m=eklendi`);
+  assert.match(r.text, /eklendi\./);
+  assert.match(r.text, new RegExp(`href="/anketler/yeni\\?model=${m1}">Ankete ilerle`));
+  r = await admin('GET', `/anketler/yeni?model=${m1}&model=${m2}`);
+  assert.match(r.text, new RegExp(`value="${m1}" checked`));
+  assert.match(r.text, new RegExp(`value="${m2}" checked`));
+  const fd = new FormData();
+  fd.append('ana_kumas', 'Poplin'); fd.append('icerik', '%100 Pamuk'); fd.append('next', 'anket');
+  fd.append('images', new Blob([PNG], { type: 'image/png' }), 'p.png');
+  r = await admin('POST', '/modeller', fd);
+  assert.match(r.location, /^\/anketler\/yeni\?model=\d+$/, 'kaydet ve ankete ilerle');
 
   r = await admin('GET', '/modeller');
   assert.match(r.text, /AKSESUAR · CKB · ŞAPKA KEP/);
@@ -199,7 +213,7 @@ test('taslak: sonra gönderme, yalnızca admin test linki, 7 gün sonra silme', 
   const user = client();
   await user('POST', '/kayit', { username: 'Mehmet', password: 'gizli-sifre', code: 'KOD-123' });
   let r = await addModel(user, { kumas: 'Triko', icerik: '%100 Yün' });
-  const model = Number(r.location.split('/').pop());
+  const model = modelIdFrom(r);
 
   r = await user('POST', '/anketler', surveyBody({ title: 'Taslak anket', models: [model], emails: 'x@f.com', action: 'taslak' }));
   assert.match(r.location, /m=taslak/);
@@ -247,7 +261,7 @@ test('A/B testi: seçenekler ayrı puanlanır, koleksiyon tercihi kazananı beli
   assert.strictEqual(r.status, 400, 'tek görselle A/B testi olmaz');
   r = await addModel(admin, { kumas: 'Ekose flanel', icerik: '%100 Pamuk', ab: true, konu: 'Ekose renkleri', labels: ['Kırmızı-lacivert', 'Yeşil-bej', ''] });
   assert.strictEqual(r.status, 302, r.text);
-  const modelId = Number(r.location.split('/').pop());
+  const modelId = modelIdFrom(r);
   const [A, B, C] = db.prepare('SELECT id FROM model_images WHERE model_id = ? ORDER BY sort_order').all(modelId).map((i) => i.id);
 
   r = await admin('POST', '/anketler', surveyBody({ title: 'Ekose testi', models: [modelId], emails: 'x@f.com, y@f.com, z@f.com', action: 'gonder' }));

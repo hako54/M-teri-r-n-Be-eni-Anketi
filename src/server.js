@@ -267,7 +267,8 @@ app.post('/modeller', auth.requireUser, upload.array('images'), (req, res) => {
     req.files.forEach((f, i) => addImg.run(lastInsertRowid, f.filename, field(labels[i], 80) || null, i));
     return lastInsertRowid;
   });
-  res.redirect(`/modeller/${id}`);
+  // "Kaydet ve ankete ilerle": model seçili olarak anket oluşturmaya geçer.
+  res.redirect(req.body.next === 'anket' ? `/anketler/yeni?model=${id}` : `/modeller/${id}?m=eklendi`);
 });
 
 const getModel = (id) => db.prepare('SELECT * FROM models WHERE id = ?').get(Number(id) || 0);
@@ -275,7 +276,7 @@ const getModel = (id) => db.prepare('SELECT * FROM models WHERE id = ?').get(Num
 app.get('/modeller/:id', auth.requireUser, (req, res) => {
   const model = getModel(req.params.id);
   if (!model) return res.redirect('/modeller');
-  send(res, views.modelFormPage({ user: req.user, model, images: modelImages(model.id) }));
+  send(res, views.modelFormPage({ user: req.user, model, images: modelImages(model.id), added: req.query.m === 'eklendi', saved: req.query.m === 'kaydedildi' }));
 });
 
 app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) => {
@@ -307,7 +308,7 @@ app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) =
     const addImg = db.prepare('INSERT INTO model_images (model_id, filename, label, sort_order) VALUES (?, ?, ?, ?)');
     (req.files || []).forEach((f, i) => addImg.run(model.id, f.filename, field(labels[i], 80) || null, start + i));
   });
-  res.redirect(`/modeller/${model.id}`);
+  res.redirect(req.body.next === 'anket' ? `/anketler/yeni?model=${model.id}` : `/modeller/${model.id}?m=kaydedildi`);
 });
 
 app.post('/modeller/:id/gorsel/:imageId/sil', auth.requireUser, (req, res) => {
@@ -332,7 +333,7 @@ app.get('/anketler', auth.requireUser, (req, res) => {
 });
 
 app.get('/anketler/yeni', auth.requireUser, (req, res) => {
-  const pre = req.query.model ? [Number(req.query.model)] : [];
+  const pre = [].concat(req.query.model || []).map(Number).filter(Boolean);
   send(res, views.newSurveyPage({ user: req.user, models: modelList(), values: { modelIds: pre } }));
 });
 
