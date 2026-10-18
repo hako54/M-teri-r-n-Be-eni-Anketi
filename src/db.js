@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
   email         TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  reset_requested_at TEXT,               -- "Şifremi unuttum" ile adminlerden sıfırlama istendiğinde
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -100,6 +101,31 @@ CREATE TABLE IF NOT EXISTS comments (
   PRIMARY KEY (invitation_id, model_id)
 );
 
+-- Admin tarafından oluşturulan tek kullanımlık şifre sıfırlama linkleri.
+CREATE TABLE IF NOT EXISTS password_resets (
+  token      TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by INTEGER REFERENCES users(id),
+  expires_at TEXT NOT NULL,
+  used_at    TEXT
+);
+
+-- Günlük yedekler: diske alınan kopya ve depolama alanına (bucket) gönderim durumu.
+CREATE TABLE IF NOT EXISTS backups (
+  id         INTEGER PRIMARY KEY,
+  day        TEXT NOT NULL,              -- Türkiye tarihi, YYYY-MM-DD
+  file       TEXT NOT NULL,
+  size       INTEGER NOT NULL,
+  remote     TEXT,                       -- 'ok', 'kapalı' veya hata mesajı
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Depolama alanına yüklenmiş görseller (her görsel bir kez yüklenir).
+CREATE TABLE IF NOT EXISTS backup_files (
+  filename    TEXT PRIMARY KEY,
+  uploaded_at TEXT NOT NULL
+);
+
 -- A/B testinde "Koleksiyona hangisi girsin?" cevabı; image_id = 0 "Hiçbiri".
 CREATE TABLE IF NOT EXISTS picks (
   invitation_id INTEGER NOT NULL REFERENCES invitations(id) ON DELETE CASCADE,
@@ -115,6 +141,7 @@ function addColumn(table, column, definition) {
   if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 addColumn('models', 'kirilim', 'TEXT');
+addColumn('users', 'reset_requested_at', 'TEXT');
 for (const col of ['result_opened_at TEXT', 'open_days INTEGER', 'open_hour TEXT', 'published_at TEXT', 'public_token TEXT', 'test_token TEXT', 'result_token TEXT']) {
   const [name, type] = col.split(' ');
   addColumn('surveys', name, type);

@@ -3,6 +3,7 @@ const { modelCode, TEST_KONULARI } = require('./db');
 const { formatTR } = require('./time');
 const { formatAvg } = require('./results');
 const kirilim = require('./kirilim');
+const config = require('./config');
 const { DRAFT_DAYS, draftExpiresAt } = require('./surveys');
 
 const draftNote = (survey) => `Taslaklar ${DRAFT_DAYS} gün içinde gönderilmezse otomatik silinir. Bu taslak ${formatTR(draftExpiresAt(survey))} tarihinde silinecek.`;
@@ -18,8 +19,9 @@ function layout({ title, user, body, nav = true, active = '' }) {
 </head><body>
 ${nav && user ? html`<header class="bar"><div class="bar-in">
   <a class="brand" href="/modeller">Model Beğeni Anketi</a>
-  <nav>${link('/modeller', 'Modeller', 'modeller')}${link('/anketler', 'Anketler', 'anketler')}</nav>
-  <form method="post" action="/cikis"><button class="linkbtn" title="${user.username}">Çıkış</button></form>
+  <nav>${link('/modeller', 'Modeller', 'modeller')}${link('/anketler', 'Anketler', 'anketler')}${user.is_admin ? link('/yonetim', 'Yönetim', 'yonetim') : ''}</nav>
+  <a class="linkbtn ${active === 'hesap' ? 'on' : ''}" href="/hesap" title="Hesabım"><span class="wide-only">${user.username}</span><span class="narrow-only">Hesap</span></a>
+  <form method="post" action="/cikis" class="wide-only"><button class="linkbtn">Çıkış</button></form>
 </div></header>` : ''}
 <main class="page">${body}</main>
 </body></html>`;
@@ -30,7 +32,14 @@ function errors(list) {
   return html`<div class="alert">${list.map((e) => html`<div>${e}</div>`)}</div>`;
 }
 
-function authPage({ mode, values = {}, errs, needsCode }) {
+// Kullanıcı adı alanı: yazılan adın yanında şirket alan adı gösterilir (ad.soyad @lcwaikiki.com).
+function usernameField(value, autocomplete = 'username', id = 'username', name = 'username') {
+  return html`<label class="field"><span>Kullanıcı adı</span>
+    <div class="domain-input"><input id="${id}" name="${name}" required autocomplete="${autocomplete}" autocapitalize="none" spellcheck="false" placeholder="ad.soyad" value="${value || ''}"><em>@${config.companyDomain}</em></div>
+    <small>Şirket e-postanızın @ öncesi.</small></label>`;
+}
+
+function authPage({ mode, values = {}, errs, needsCode, flash }) {
   const isReg = mode === 'kayit';
   return layout({
     title: isReg ? 'Hesap oluştur' : 'Giriş',
@@ -40,15 +49,107 @@ function authPage({ mode, values = {}, errs, needsCode }) {
       <div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>
       <h1>${isReg ? 'Hoş geldiniz' : 'Tekrar hoş geldiniz'}</h1>
       <p class="sub">${isReg ? 'Hesabınızı bir kez oluşturun, sonra bu bilgilerle girin.' : 'Kullanıcı adınız ve şifrenizle girin.'}</p>
+      ${flash ? html`<div class="ok">${flash}</div>` : ''}
       ${errors(errs)}
       <form method="post" class="stack">
-        <label class="field"><span>Kullanıcı adı</span><input id="username" name="username" required autocomplete="username" value="${values.username || ''}"></label>
-        ${isReg ? html`<label class="field"><span>E-posta</span><input id="email" name="email" type="email" required autocomplete="email" value="${values.email || ''}"></label>` : ''}
-        <label class="field"><span>Şifre</span><input id="password" name="password" type="password" required minlength="${isReg ? 8 : 1}" autocomplete="${isReg ? 'new-password' : 'current-password'}"></label>
+        ${usernameField(values.username)}
+        <label class="field"><span>Şifre</span><input id="password" name="password" type="password" required minlength="${isReg ? 8 : 1}" autocomplete="${isReg ? 'new-password' : 'current-password'}">${isReg ? html`<small>En az 8 karakter.</small>` : ''}</label>
         ${isReg && needsCode ? html`<label class="field"><span>Kayıt kodu</span><input id="code" name="code" required value="${values.code || ''}"><small>Şirket yöneticinizden alabilirsiniz.</small></label>` : ''}
         <button class="btn">${isReg ? 'Başlayalım' : 'Giriş yap'}</button>
       </form>
-      <p class="center small">${isReg ? html`Hesabınız var mı? <a href="/giris">Giriş yapın</a>` : html`İlk kez mi geldiniz? <a href="/kayit">Hesap oluşturun</a>`}</p>
+      <p class="center small">${isReg ? html`Hesabınız var mı? <a href="/giris">Giriş yapın</a>` : html`<a href="/sifremi-unuttum">Şifremi unuttum</a> · İlk kez mi geldiniz? <a href="/kayit">Hesap oluşturun</a>`}</p>
+    </div>`,
+  });
+}
+
+function forgotPage({ sent, username, adminMailto }) {
+  return layout({
+    title: 'Şifremi unuttum', nav: false,
+    body: html`
+    <div class="auth">
+      <div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>
+      <h1>Şifremi unuttum</h1>
+      ${sent ? html`
+      <div class="ok">İsteğiniz kaydedildi. Adminler size tek kullanımlık bir şifre sıfırlama linki gönderecek.</div>
+      <p class="sub">Daha hızlı olması için adminlere Outlook'tan da yazabilirsiniz.</p>
+      <a class="btn outlook" href="${adminMailto}">Adminlere Outlook ile yaz</a>
+      <p class="center small"><a href="/giris">Girişe dön</a></p>` : html`
+      <p class="sub">Kullanıcı adınızı yazın. Adminler size yeni şifre belirleyebileceğiniz bir link gönderir.</p>
+      <form method="post" class="stack">
+        ${usernameField(username)}
+        <button class="btn">Sıfırlama iste</button>
+      </form>
+      <p class="center small"><a href="/giris">Girişe dön</a></p>`}
+    </div>`,
+  });
+}
+
+function passwordFields(withCurrent) {
+  return html`
+    ${withCurrent ? html`<label class="field"><span>Mevcut şifre</span><input id="current" name="current" type="password" required autocomplete="current-password"></label>` : ''}
+    <label class="field"><span>Yeni şifre</span><input id="password" name="password" type="password" required minlength="8" autocomplete="new-password"><small>En az 8 karakter.</small></label>
+    <label class="field"><span>Yeni şifre (tekrar)</span><input id="password2" name="password2" type="password" required minlength="8" autocomplete="new-password"></label>`;
+}
+
+function newPasswordPage({ username, errs }) {
+  return layout({
+    title: 'Yeni şifre', nav: false,
+    body: html`
+    <div class="auth">
+      <div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>
+      <h1>Yeni şifre belirleyin</h1>
+      <p class="sub">Kullanıcı adı: <b>${username}</b></p>
+      ${errors(errs)}
+      <form method="post" class="stack">${passwordFields(false)}<button class="btn">Şifreyi kaydet</button></form>
+    </div>`,
+  });
+}
+
+function accountPage({ user, errs, flash }) {
+  return layout({
+    title: 'Hesabım', user, active: 'hesap',
+    body: html`
+    <div class="head"><div><h1>Hesabım</h1><p class="sub">${user.username} · ${user.email}${user.is_admin ? ' · Admin' : ''}</p></div></div>
+    ${flash ? html`<div class="ok">${flash}</div>` : ''}
+    ${errors(errs)}
+    <form method="post" class="card stack narrow"><div class="label">Şifre değiştir</div>${passwordFields(true)}<button class="btn">Şifreyi değiştir</button></form>
+    <form method="post" action="/cikis"><button class="btn btn-soft">Çıkış yap</button></form>`,
+  });
+}
+
+function formatSize(bytes) {
+  return bytes > 1048576 ? `${(bytes / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function adminPage({ user, users, resetLink, backups, s3Enabled, localDays, remoteDays, flash }) {
+  const requested = users.filter((u) => u.reset_requested_at).length;
+  return layout({
+    title: 'Yönetim', user, active: 'yonetim',
+    body: html`
+    <div class="head"><div><h1>Yönetim</h1><p class="sub">${users.length} kullanıcı${requested ? ` · ${requested} şifre sıfırlama isteği` : ''}</p></div></div>
+    ${flash ? html`<div class="ok">${flash}</div>` : ''}
+    ${resetLink ? html`<div class="card stack result-mail pending" id="sifirla">
+      <div class="label">${resetLink.username} için sıfırlama linki</div>
+      <p class="sub">Link 24 saat geçerli ve bir kez kullanılabilir. Kullanıcı yeni şifresini belirleyince açık oturumları kapanır.</p>
+      <a class="btn outlook" href="${resetLink.mailto}">Linki ${resetLink.email} adresine Outlook ile gönder</a>
+      ${copyField('resetlink', 'Sıfırlama linki', resetLink.url)}
+    </div>` : ''}
+    <h2>Kullanıcılar</h2>
+    <div class="card"><table class="tbl"><thead><tr><th>Kullanıcı</th><th>Anket</th><th></th></tr></thead><tbody>
+      ${users.map((u) => html`<tr>
+        <td><b>${u.username}</b><div class="sub">${u.email}</div>${u.reset_requested_at ? html`<span class="pill wait">Şifre sıfırlama istedi</span>` : ''}</td>
+        <td class="nw">${u.survey_count}</td>
+        <td class="nw"><form method="post" action="/yonetim/sifirla/${u.id}"><button class="btn btn-sm ${u.reset_requested_at ? '' : 'btn-soft'}">Sıfırlama linki</button></form></td></tr>`)}
+    </tbody></table></div>
+    <h2>Yedekler</h2>
+    <div class="card stack">
+      <p class="sub">Her gün 03:00'ten sonra otomatik yedek alınır. Veritabanının kopyası ${localDays} gün sunucu diskinde tutulur${s3Enabled ? html`; ayrıca diskten bağımsız depolama alanına gönderilir (veritabanı ${remoteDays} gün, görseller kalıcı).` : html`. <b>Diskten bağımsız depolama alanı ayarlı değil.</b>`}</p>
+      <form method="post" action="/yonetim/yedekle"><button class="btn btn-sm">Şimdi yedekle</button></form>
+      ${backups.length ? html`<table class="tbl"><thead><tr><th>Tarih</th><th>Boyut</th><th>Depolama alanı</th><th></th></tr></thead><tbody>
+        ${backups.map((b) => html`<tr><td class="nw">${formatTR(b.created_at.replace(' ', 'T') + 'Z')}</td><td class="nw">${formatSize(b.size)}</td>
+          <td>${b.remote.startsWith('ok') ? html`<span class="pill done">${b.remote}</span>` : b.remote === 'kapalı' ? html`<span class="pill">kapalı</span>` : html`<span class="err">${b.remote}</span>`}</td>
+          <td class="nw">${b.available ? html`<a href="/yonetim/yedek/${b.file}">İndir</a>` : html`<span class="sub">silindi</span>`}</td></tr>`)}
+      </tbody></table>` : html`<p class="empty">Henüz yedek yok.</p>`}
     </div>`,
   });
 }
@@ -191,8 +292,8 @@ function newSurveyPage({ user, models, values = {}, errs }) {
       </div>
       <div class="card stack">
         <label class="field"><span>Kime gönderilsin?</span>
-          <textarea id="emails" name="emails" rows="4" required placeholder="mehmet@firma.com.tr&#10;selin@magaza.com">${values.emails || ''}</textarea>
-          <small>Her satıra bir adres ya da virgülle ayırın. Gönderirken bu adresler Outlook'ta gizli alıcı (BCC) olarak eklenir.</small></label>
+          <textarea id="emails" name="emails" rows="4" required placeholder="mehmet.yilmaz&#10;selin.kaya&#10;dis.tedarikci@ornek.com">${values.emails || ''}</textarea>
+          <small>Kullanıcı adı (ad.soyad) ya da tam adres yazın; her satıra bir kişi ya da virgülle ayırın. Outlook'tan kopyaladığınız "Ad Soyad &lt;adres&gt;" listesi de olur. Gönderirken Outlook'ta gizli alıcı (BCC) olarak eklenir.</small></label>
       </div>
       <div class="card stack">
         <div class="two">
@@ -406,13 +507,13 @@ function joinPage({ survey, modelCount, email = '', errs }) {
     <div class="auth">
       <div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>
       <h1>${survey.title}</h1>
-      <p class="sub">${modelCount} model · ${formatTR(survey.closes_at)} tarihine kadar açık. Başlamak için şirket e-posta adresinizi yazın.</p>
+      <p class="sub">${modelCount} model · ${formatTR(survey.closes_at)} tarihine kadar açık. Başlamak için kullanıcı adınızı yazın.</p>
       ${errors(errs)}
       <form method="post" class="stack">
-        <label class="field"><span>E-posta</span><input id="email" name="email" type="email" required autocomplete="email" inputmode="email" value="${email}"></label>
+        ${usernameField(email, 'username', 'email', 'email')}
         <button class="btn">Ankete başla</button>
       </form>
-      <p class="center small sub">Her adres anketi bir kez doldurabilir.</p>
+      <p class="center small sub">Her kişi anketi bir kez doldurabilir. Şirket dışından katılıyorsanız tam e-posta adresinizi yazın.</p>
     </div>`,
   });
 }
@@ -439,5 +540,5 @@ function messagePage({ title, text, link }) {
 
 module.exports = {
   authPage, modelsPage, modelFormPage, surveysPage, newSurveyPage, surveyDetailPage,
-  participantPage, joinPage, publicResultPage, messagePage, raw,
+  participantPage, joinPage, publicResultPage, messagePage, forgotPage, newPasswordPage, accountPage, adminPage, raw,
 };

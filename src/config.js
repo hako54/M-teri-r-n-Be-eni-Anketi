@@ -12,5 +12,16 @@ module.exports = {
   tzOffsetMinutes: 180,
   sessionDays: 30,
   // Bu adreslerle kayıtlı kullanıcılar admindir (test linki). Virgül veya noktalı virgülle ayrılır.
+  // Kullanıcı adları bu alan adına çevrilir: alihakan.baykal -> alihakan.baykal@lcwaikiki.com
+  companyDomain: (process.env.COMPANY_DOMAIN || 'lcwaikiki.com').toLowerCase(),
+  backupDir: path.join(dataDir, 'yedekler'),
+  // Yedeklerin diskten bağımsız kopyası için S3 uyumlu depolama (Railway bucket). Boşsa yalnızca diske yedeklenir.
+  s3: {
+    endpoint: process.env.BACKUP_S3_ENDPOINT || '',
+    bucket: process.env.BACKUP_S3_BUCKET || '',
+    region: process.env.BACKUP_S3_REGION || 'auto',
+    accessKey: process.env.BACKUP_S3_ACCESS_KEY_ID || '',
+    secretKey: process.env.BACKUP_S3_SECRET_ACCESS_KEY || '',
+  },
   adminEmails: (process.env.ADMIN_EMAILS || '').split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean),
 };

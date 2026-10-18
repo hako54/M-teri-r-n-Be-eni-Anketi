@@ -2,16 +2,21 @@ const crypto = require('node:crypto');
 const { db, tx, modelCode } = require('./db');
 const { firstImage } = require('./results');
 const { closesAt } = require('./time');
+const { toAddress } = require('./kullanici');
 
 const newToken = () => crypto.randomBytes(16).toString('base64url');
 
-const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
-
 // Virgül, noktalı virgül, boşluk veya satır sonu ile ayrılmış listeyi temizler.
+// Kullanıcı adları (alihakan.baykal) şirket adresine çevrilir; "Ad Soyad <adres>" biçimindeki Outlook kopyaları da okunur.
 function parseEmails(text) {
-  const all = String(text || '').split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
-  const valid = [...new Set(all.filter((e) => EMAIL_RE.test(e)))];
-  const invalid = all.filter((e) => !EMAIL_RE.test(e));
+  const cleaned = String(text || '').replace(/[^<>,;\n]*<([^>]+)>/g, ' $1 ');
+  const all = cleaned.split(/[\s,;]+/).map((e) => e.trim()).filter(Boolean);
+  const valid = [];
+  const invalid = [];
+  for (const item of all) {
+    const address = toAddress(item);
+    if (address) { if (!valid.includes(address)) valid.push(address); } else invalid.push(item);
+  }
   return { valid, invalid };
 }
 

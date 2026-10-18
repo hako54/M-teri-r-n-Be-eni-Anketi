@@ -111,4 +111,22 @@ function closingReminderIcs({ survey, url }) {
   ].join('\r\n');
 }
 
-module.exports = { inviteMailto, resultMailto, testMailto, closingReminderIcs };
+// Şifresini unutan kullanıcının adminlere yazdığı istek.
+function resetRequestMailto({ username, to }) {
+  return build({
+    to,
+    subject: 'Model Beğeni Anketi: şifre sıfırlama isteği',
+    body: `Merhaba,\n\n"${username}" kullanıcı adlı hesabımın şifresini sıfırlamak istiyorum. Yönetim sayfasından sıfırlama linki oluşturabilir misiniz?\n\n${config.baseUrl}/yonetim\n\nTeşekkürler`,
+  });
+}
+
+// Adminin kullanıcıya gönderdiği tek kullanımlık şifre sıfırlama linki.
+function resetLinkMailto({ email, url, hours }) {
+  return build({
+    to: [email],
+    subject: 'Model Beğeni Anketi: şifre sıfırlama linkiniz',
+    body: `Merhaba,\n\nŞifrenizi yenilemek için bu linki açın (${hours} saat geçerli, bir kez kullanılabilir):\n${url}\n\nBu isteği siz yapmadıysanız bu maili dikkate almayın.`,
+  });
+}
+
+module.exports = { inviteMailto, resultMailto, testMailto, closingReminderIcs, resetRequestMailto, resetLinkMailto };

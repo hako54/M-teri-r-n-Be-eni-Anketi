@@ -4,11 +4,13 @@ Model görsellerini yükleyip beğeni anketi yapan web uygulaması. Davet ve son
 
 ## Neler yapar
 
-- **Hesap:** Kullanıcı adı, e-posta ve şifre ile tek seferlik kayıt (kayıt kodu gerekir), sonra giriş.
+- **Hesap:** Kullanıcı adı şirket e-postasının @ öncesidir (`alihakan.baykal` → `alihakan.baykal@lcwaikiki.com`); yalnızca şirket alan adı kayıt olabilir. Kayıt kodu gerekir. Giriş kullanıcı adı ya da tam adresle yapılır.
+- **Şifre:** "Şifremi unuttum" isteği adminlere düşer (Outlook ile de yazılabilir); admin Yönetim sayfasından 24 saat geçerli, tek kullanımlık sıfırlama linki oluşturup kullanıcıya Outlook ile gönderir. Kullanıcı Hesabım sayfasından şifresini değiştirebilir.
+- **Günlük yedek:** Her gün 03:00'ten sonra veritabanının kopyası sunucu diskine (14 gün) ve diskten bağımsız depolama alanına (Railway bucket; veritabanı 30 gün, görseller kalıcı) alınır. Yönetim sayfasında yedekler listelenir, indirilir, istenirse elle alınır.
 - **Modeller:** Sınırsız model, her modele birden fazla görsel. Her yeni model otomatik numara alır (`MDL-0001`, `MDL-0002`…). Ana kumaş ve içerik elle yazılır.
 - **Ürün kırılımı:** Marka Müdürlükleri → Gelecek Dönem Buyer Grup → Gelecek Dönem Merch Alt Grup Kod → Gelecek Dönem Ürün Klasman. Alt kırılımlı seçilir: üst seviye seçilince yalnızca ona ait alt seçenekler gelir. Galeri marka müdürlüğüne göre süzülebilir, Excel çıktısında her seviye ayrı sütundur.
 - **A/B testi:** Bir modelin görselleri aynı ürünün alternatifleriyse (model rengi, jakar deseni, çizgi renkleri ve yerleşimi, kumaş dokusu, ekose renkleri, baskı) model "A/B testi" olarak işaretlenir. Her görsel bir seçenek olur (A, B, C…) ve isteğe bağlı bir ad alır. Katılımcı her seçeneği ayrı puanlar, sonra "Koleksiyona hangisi girsin?" sorusunda birini ya da "Hiçbiri"ni seçer. En çok tercih edilen seçenek (eşitlikte yüksek ortalama) kazanır.
-- **Anket gönderme (Outlook):** "Oluştur ve Outlook'ta gönder" anketi canlıya alır ve cihazdaki Outlook'u; alıcılar gizli (BCC), konu ve anket linki hazır bir mail ile açar. Gönderen kişinin kendi şirket hesabı kullanılır. Herkes aynı linki alır; katılımcı linki açınca e-posta adresini yazar ve her adres anketi bir kez doldurabilir.
+- **Anket gönderme (Outlook):** "Oluştur ve Outlook'ta gönder" anketi canlıya alır ve cihazdaki Outlook'u; alıcılar gizli (BCC), konu ve anket linki hazır bir mail ile açar. Gönderen kişinin kendi şirket hesabı kullanılır. Herkes aynı linki alır; katılımcı linki açınca kullanıcı adını yazar (şirket dışı kişiler tam adresini) ve her kişi anketi bir kez doldurabilir. Alıcı listesine kullanıcı adları ya da Outlook'tan kopyalanan "Ad Soyad <adres>" listesi yazılabilir.
 - **Taslak:** "Taslak olarak kaydet" ile kaydedilen anket sonra "Gönder" ile canlıya alınır. Gönderilmeyen taslaklar 7 gün sonra otomatik silinir.
 - **Test linki (yalnızca admin):** Admin, anketi canlıya almadan önce katılımcının göreceği şekilde dener; test yanıtları kaydedilmez. Adminler `ADMIN_EMAILS` ayarındaki adreslerle kayıtlı kullanıcılardır.
 - **Katılımcı ekranı:** Telefonda modeller tek tek gösterilir. Her model için 1–5 puan **veya "Tarzım değil"** seçilir (ortalamaya katılmaz); isteğe bağlı yorum yazılır.
@@ -52,6 +54,8 @@ Uygulama mail göndermez: davet, test ve sonuç mailleri `mailto:` linkleriyle k
 | `BASE_URL` | Uygulamanın internet adresi. Maildeki linkler ve görseller bununla oluşur. |
 | `DATA_DIR` | Veritabanı ve görsellerin klasörü. Sunucuda **kalıcı disk** olmalı. |
 | `REGISTRATION_CODE` | Doluysa yalnızca bu kodu bilenler hesap açabilir. |
+| `COMPANY_DOMAIN` | Kullanıcı adlarının çevrildiği şirket alan adı (varsayılan `lcwaikiki.com`). |
+| `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_REGION`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Yedeklerin gönderileceği S3 uyumlu depolama alanı. Railway'de bucket değişken referanslarıyla verilir (`${{yedek.ENDPOINT}}` …). Boşsa yalnızca diske yedeklenir. |
 | `ADMIN_EMAILS` | Admin kullanıcıların e-postaları (noktalı virgül veya virgülle). Test linkini yalnızca onlar görür. |
 
 ## Yayına alma
@@ -70,6 +74,9 @@ src/rapor.js      sonuç raporu HTML'i (Outlook'a yapıştırılır)
 src/gorsel.js     sonuç raporu görseli (PNG, assets/fonts ile çizilir)
 src/eml.js        ekli ve görselli Outlook taslağı (.eml)
 src/kirilim.js    alt kırılımlı ürün grupları
+src/kullanici.js  kullanıcı adı ↔ şirket e-postası
+src/yedek.js      günlük yedek (disk + depolama alanı)
+src/s3.js         depolama alanına yükleme (AWS Signature V4)
 src/views.js      sayfalar
 public/           stil ve küçük tarayıcı betikleri
 test/             uçtan uca test

@@ -263,3 +263,17 @@ select:disabled { opacity: .55; }
 .report-preview::after { content: "Tam boyut için dokunun"; position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 10px 8px; text-align: center; font-size: .8rem; font-weight: 700; color: var(--accent-ink); background: linear-gradient(transparent, #fff 70%); }
 .send-option { display: flex; flex-direction: column; gap: 6px; }
 .send-option p { margin: 0; }
+.domain-input { display: flex; align-items: center; background: var(--soft); border-radius: 14px; border: 2px solid transparent; }
+.domain-input:focus-within { border-color: var(--accent); background: #fff; }
+.domain-input input { border: 0 !important; background: transparent !important; flex: 1; min-width: 0; }
+.domain-input em { font-style: normal; color: var(--muted); font-weight: 700; padding-right: 14px; white-space: nowrap; font-size: .9rem; }
+.bar a.linkbtn { text-decoration: none; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.narrow { max-width: 460px; }
+.narrow-only { display: none; }
+@media (max-width: 560px) {
+  .wide-only { display: none !important; }
+  .narrow-only { display: inline; }
+  .bar-in { gap: 6px; }
+  .bar nav a, .bar a.linkbtn { padding: 6px 9px; font-size: .92rem; }
+  .bar a.linkbtn.on { background: var(--chip); color: var(--accent-ink); border-radius: 999px; }
+}

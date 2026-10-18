@@ -6,6 +6,8 @@ const path = require('node:path');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'anket-test-'));
 process.env.ADMIN_EMAILS = 'Ayse@Firma.com.tr; diger.admin@firma.com.tr';
+process.env.COMPANY_DOMAIN = 'firma.com.tr';
+process.env.REGISTRATION_CODE = 'KOD-123';
 
 const app = require('../src/server');
 const { db } = require('../src/db');
@@ -72,7 +74,7 @@ test.before(async () => {
   await new Promise((resolve) => { server = app.listen(0, resolve); });
   base = `http://127.0.0.1:${server.address().port}`;
   admin = client();
-  await admin('POST', '/kayit', { username: 'ayse', email: 'ayse@firma.com.tr', password: 'gizli-sifre' });
+  await admin('POST', '/kayit', { username: 'ayse', password: 'gizli-sifre', code: 'KOD-123' });
 });
 test.after(() => server.close());
 
@@ -123,7 +125,7 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
   assert.ok(r.text.includes(encodeURIComponent(`/k/${survey.public_token}`)), 'mailde ortak link olmalı');
   assert.match(r.text, /window.location.href=a.href/, 'Outlook otomatik açılmalı');
 
-  const mehmet = await join(survey.public_token, 'Mehmet@firma.com.tr');
+  const mehmet = await join(survey.public_token, 'Mehmet');
   const selin = await join(survey.public_token, 'selin@magaza.com');
   const disaridan = await join(survey.public_token, 'ali@firma.com.tr');
   assert.strictEqual(await join(survey.public_token, 'mehmet@firma.com.tr'), mehmet, 'aynı adres aynı ankete döner');
@@ -195,7 +197,7 @@ test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
 
 test('taslak: sonra gönderme, yalnızca admin test linki, 7 gün sonra silme', async () => {
   const user = client();
-  await user('POST', '/kayit', { username: 'mehmet', email: 'mehmet@firma.com.tr', password: 'gizli-sifre' });
+  await user('POST', '/kayit', { username: 'Mehmet', password: 'gizli-sifre', code: 'KOD-123' });
   let r = await addModel(user, { kumas: 'Triko', icerik: '%100 Yün' });
   const model = Number(r.location.split('/').pop());
 
@@ -287,4 +289,94 @@ test('giriş yapmadan yönetim sayfaları açılmaz', async () => {
   const r = await client()('GET', '/modeller');
   assert.strictEqual(r.status, 302);
   assert.strictEqual(r.location, '/giris');
+});
+
+test('hesap: kullanıcı adı = şirket e-postasının @ öncesi; şifre sıfırlama ve değiştirme', async () => {
+  const c = client();
+  let r = await c('POST', '/kayit', { username: 'baska@gmail.com', password: 'gizli-sifre', code: 'KOD-123' });
+  assert.strictEqual(r.status, 400, 'şirket dışı adres kayıt olamaz');
+  r = await c('POST', '/kayit', { username: 'selin.kaya', password: 'gizli-sifre', code: 'YANLIS' });
+  assert.match(r.text, /Kayıt kodu hatalı/);
+  r = await c('POST', '/kayit', { username: 'Selin.Kaya@FIRMA.com.tr', password: 'gizli-sifre', code: 'KOD-123' });
+  assert.strictEqual(r.status, 302);
+  const selin = db.prepare("SELECT * FROM users WHERE username = 'selin.kaya'").get();
+  assert.strictEqual(selin.email, 'selin.kaya@firma.com.tr');
+  r = await client()('POST', '/kayit', { username: 'selin.kaya', password: 'gizli-sifre', code: 'KOD-123' });
+  assert.match(r.text, /zaten bir hesap var/);
+
+  // Giriş: kullanıcı adı ya da tam adresle
+  r = await client()('POST', '/giris', { username: 'SELIN.KAYA', password: 'gizli-sifre' });
+  assert.strictEqual(r.location, '/modeller');
+  r = await client()('POST', '/giris', { username: 'selin.kaya@firma.com.tr', password: 'gizli-sifre' });
+  assert.strictEqual(r.location, '/modeller');
+
+  // Yönetim yalnızca admin
+  r = await c('GET', '/yonetim');
+  assert.strictEqual(r.status, 403);
+
+  // Şifremi unuttum -> admin link oluşturur -> kullanıcı yeni şifre belirler, eski oturum kapanır
+  r = await client()('POST', '/sifremi-unuttum', { username: 'selin.kaya' });
+  assert.match(r.text, /Adminlere Outlook ile yaz/);
+  assert.match(r.text, /mailto:ayse%40firma.com.tr,diger.admin%40firma.com.tr/);
+  r = await client()('POST', '/sifremi-unuttum', { username: 'olmayan.kisi' });
+  assert.match(r.text, /İsteğiniz kaydedildi/, 'hesabın varlığı açığa çıkmaz');
+  r = await admin('GET', '/yonetim');
+  assert.match(r.text, /Şifre sıfırlama istedi/);
+  r = await admin('POST', `/yonetim/sifirla/${selin.id}`);
+  const token = r.location.match(/sifirla=([^#]+)/)[1];
+  r = await admin('GET', r.location);
+  assert.match(r.text, /mailto:selin.kaya%40firma.com.tr\?subject=/);
+
+  const anon2 = client();
+  r = await anon2('POST', `/sifre-sifirla/${token}`, { password: 'yeni-sifre-1', password2: 'farkli' });
+  assert.strictEqual(r.status, 400);
+  r = await anon2('POST', `/sifre-sifirla/${token}`, { password: 'yeni-sifre-1', password2: 'yeni-sifre-1' });
+  assert.strictEqual(r.location, '/giris?m=sifre');
+  r = await anon2('GET', `/sifre-sifirla/${token}`);
+  assert.strictEqual(r.status, 404, 'link bir kez kullanılır');
+  r = await c('GET', '/modeller');
+  assert.strictEqual(r.location, '/giris', 'eski oturum kapanır');
+  r = await client()('POST', '/giris', { username: 'selin.kaya', password: 'gizli-sifre' });
+  assert.strictEqual(r.status, 401);
+  const c2 = client();
+  r = await c2('POST', '/giris', { username: 'selin.kaya', password: 'yeni-sifre-1' });
+  assert.strictEqual(r.location, '/modeller');
+  assert.strictEqual(db.prepare('SELECT reset_requested_at FROM users WHERE id = ?').get(selin.id).reset_requested_at, null);
+
+  // Hesabım: şifre değiştirme
+  r = await c2('POST', '/hesap', { current: 'yanlis', password: 'ucuncu-sifre', password2: 'ucuncu-sifre' });
+  assert.match(r.text, /Mevcut şifre hatalı/);
+  r = await c2('POST', '/hesap', { current: 'yeni-sifre-1', password: 'ucuncu-sifre', password2: 'ucuncu-sifre' });
+  assert.strictEqual(r.location, '/hesap?m=ok');
+});
+
+test('katılımcı listesi: kullanıcı adları ve Outlook kopyası', () => {
+  const { valid, invalid } = surveys.parseEmails('ALI HAKAN BAYKAL <ALIHAKAN.BAYKAL@Lcwaikiki.com>; yusuf.bas\ndis@ornek.com, bozuk@');
+  assert.deepStrictEqual(valid, ['alihakan.baykal@lcwaikiki.com', 'yusuf.bas@firma.com.tr', 'dis@ornek.com']);
+  assert.deepStrictEqual(invalid, ['bozuk@']);
+});
+
+test('yedek: günlük kopya 03:00 sonrası bir kez alınır, admin indirebilir', async () => {
+  const yedek = require('../src/yedek');
+  const gece = new Date('2030-01-10T23:30:00Z'); // TR 11 Ocak 02:30
+  assert.strictEqual(await yedek.backupIfDue(gece), null, '03:00 öncesi yedek alınmaz');
+  const sabah = new Date('2030-01-11T01:00:00Z'); // TR 04:00
+  const b = await yedek.backupIfDue(sabah);
+  assert.strictEqual(b.day, '2030-01-11');
+  assert.strictEqual(b.remote, 'kapalı');
+  assert.ok(b.size > 0);
+  assert.strictEqual(await yedek.backupIfDue(new Date('2030-01-11T10:00:00Z')), null, 'aynı gün ikinci kez alınmaz');
+
+  // Yedek dosyası gerçek bir veritabanı ve kullanıcıları içerir.
+  const { DatabaseSync } = require('node:sqlite');
+  const copy = new DatabaseSync(path.join(process.env.DATA_DIR, 'yedekler', 'anket-2030-01-11.db'));
+  assert.ok(copy.prepare('SELECT COUNT(*) AS n FROM users').get().n >= 2);
+  copy.close();
+
+  let r = await admin('GET', '/yonetim');
+  assert.match(r.text, /href="\/yonetim\/yedek\/anket-2030-01-11.db"/);
+  r = await admin('GET', '/yonetim/yedek/..%2Fanket.db');
+  assert.strictEqual(r.status, 302, 'yedek klasörü dışı dosya verilmez');
+  r = await admin('POST', '/yonetim/yedekle');
+  assert.strictEqual(r.location, '/yonetim?m=yedek');
 });

@@ -15,6 +15,9 @@ const { resultEmail } = require('./rapor');
 const surveys = require('./surveys');
 const kirilim = require('./kirilim');
 const outlook = require('./outlook');
+const yedek = require('./yedek');
+const s3 = require('./s3');
+const { companyAccount, toAddress } = require('./kullanici');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -40,32 +43,135 @@ const field = (v, max) => String(v ?? '').trim().slice(0, max);
 // ---------- Hesap ----------
 app.get('/', (req, res) => res.redirect(req.user ? '/modeller' : '/giris'));
 
-app.get('/kayit', (req, res) => send(res, views.authPage({ mode: 'kayit', needsCode: Boolean(process.env.REGISTRATION_CODE) })));
+const needsCode = () => Boolean(process.env.REGISTRATION_CODE);
+
+app.get('/kayit', (req, res) => send(res, views.authPage({ mode: 'kayit', needsCode: needsCode() })));
 app.post('/kayit', (req, res) => {
-  const values = { username: field(req.body.username, 40), email: field(req.body.email, 120).toLowerCase(), code: field(req.body.code, 80) };
+  const values = { username: field(req.body.username, 120), code: field(req.body.code, 80) };
   const password = String(req.body.password || '');
+  const account = companyAccount(values.username);
   const errs = [];
-  if (!/^[\p{L}\p{N}._-]{3,40}$/u.test(values.username)) errs.push('Kullanıcı adı en az 3 karakter olmalı; harf, rakam, nokta, tire kullanabilirsiniz.');
-  if (!surveys.parseEmails(values.email).valid.length) errs.push('Geçerli bir e-posta adresi girin.');
+  if (!account) errs.push(`Kullanıcı adınızı şirket e-postanızın @ öncesi olarak yazın (ör. ad.soyad). Yalnızca @${config.companyDomain} adresleri kayıt olabilir.`);
   if (password.length < 8) errs.push('Şifre en az 8 karakter olmalı.');
-  if (process.env.REGISTRATION_CODE && values.code !== process.env.REGISTRATION_CODE) errs.push('Kayıt kodu hatalı.');
-  if (!errs.length && db.prepare('SELECT 1 FROM users WHERE username = ?').get(values.username)) errs.push('Bu kullanıcı adı alınmış.');
-  if (errs.length) return send(res, views.authPage({ mode: 'kayit', values, errs, needsCode: Boolean(process.env.REGISTRATION_CODE) }), 400);
+  if (needsCode() && values.code !== process.env.REGISTRATION_CODE) errs.push('Kayıt kodu hatalı.');
+  if (!errs.length && db.prepare('SELECT 1 FROM users WHERE username = ? OR lower(email) = ?').get(account.username, account.email)) {
+    errs.push('Bu kullanıcı adıyla zaten bir hesap var. Şifrenizi unuttuysanız “Şifremi unuttum”u kullanın.');
+  }
+  if (errs.length) return send(res, views.authPage({ mode: 'kayit', values, errs, needsCode: needsCode() }), 400);
   const { lastInsertRowid } = db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)')
-    .run(values.username, values.email, auth.hashPassword(password));
+    .run(account.username, account.email, auth.hashPassword(password));
   auth.startSession(req, res, Number(lastInsertRowid));
   res.redirect('/modeller');
 });
 
-app.get('/giris', (req, res) => (req.user ? res.redirect('/modeller') : send(res, views.authPage({ mode: 'giris' }))));
+// Kullanıcı adı veya tam şirket e-postasıyla bulunur; eski sürümde açılmış hesapların adları da çalışır.
+function findUser(input) {
+  const raw = field(input, 120);
+  const account = companyAccount(raw);
+  return db.prepare('SELECT * FROM users WHERE username = ? OR lower(email) = ? OR username = ? ORDER BY id LIMIT 1')
+    .get(account ? account.username : raw, account ? account.email : raw.toLowerCase(), raw);
+}
+
+app.get('/giris', (req, res) => (req.user ? res.redirect('/modeller') : send(res, views.authPage({ mode: 'giris', flash: req.query.m === 'sifre' ? 'Şifreniz değiştirildi. Yeni şifrenizle giriş yapın.' : null }))));
 app.post('/giris', (req, res) => {
-  const username = field(req.body.username, 40);
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  const user = findUser(req.body.username);
   if (!user || !auth.verifyPassword(String(req.body.password || ''), user.password_hash)) {
-    return send(res, views.authPage({ mode: 'giris', values: { username }, errs: ['Kullanıcı adı veya şifre hatalı.'] }), 401);
+    return send(res, views.authPage({ mode: 'giris', values: { username: field(req.body.username, 120) }, errs: ['Kullanıcı adı veya şifre hatalı.'] }), 401);
   }
   auth.startSession(req, res, user.id);
   res.redirect('/modeller');
+});
+
+// Şifremi unuttum: sunucu mail göndermediği için istek adminlere iletilir; admin tek kullanımlık link oluşturur.
+app.get('/sifremi-unuttum', (req, res) => send(res, views.forgotPage({})));
+app.post('/sifremi-unuttum', (req, res) => {
+  const username = field(req.body.username, 120);
+  const user = findUser(username);
+  if (user) db.prepare('UPDATE users SET reset_requested_at = ? WHERE id = ?').run(new Date().toISOString(), user.id);
+  // Hesabın var olup olmadığı açığa çıkmasın diye her durumda aynı sayfa gösterilir.
+  send(res, views.forgotPage({ sent: true, username, adminMailto: outlook.resetRequestMailto({ username, to: config.adminEmails }) }));
+});
+
+const RESET_HOURS = 24;
+const findReset = (token) => db.prepare(`
+  SELECT r.*, u.username FROM password_resets r JOIN users u ON u.id = r.user_id
+  WHERE r.token = ? AND r.used_at IS NULL AND r.expires_at > ?`).get(String(token), new Date().toISOString());
+
+app.get('/sifre-sifirla/:token', (req, res) => {
+  const reset = findReset(req.params.token);
+  if (!reset) return send(res, views.messagePage({ title: 'Link geçersiz', text: 'Bu şifre sıfırlama linki kullanılmış ya da süresi dolmuş. Adminden yeni bir link isteyin.', link: { href: '/sifremi-unuttum', label: 'Yeni link iste' } }), 404);
+  send(res, views.newPasswordPage({ username: reset.username }));
+});
+
+app.post('/sifre-sifirla/:token', (req, res) => {
+  const reset = findReset(req.params.token);
+  if (!reset) return res.redirect(`/sifre-sifirla/${encodeURIComponent(req.params.token)}`);
+  const password = String(req.body.password || '');
+  if (password.length < 8 || password !== String(req.body.password2 || '')) {
+    return send(res, views.newPasswordPage({ username: reset.username, errs: ['Şifre en az 8 karakter olmalı ve iki alan aynı olmalı.'] }), 400);
+  }
+  tx(() => {
+    db.prepare('UPDATE users SET password_hash = ?, reset_requested_at = NULL WHERE id = ?').run(auth.hashPassword(password), reset.user_id);
+    db.prepare('UPDATE password_resets SET used_at = ? WHERE token = ?').run(new Date().toISOString(), reset.token);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(reset.user_id);
+  });
+  res.redirect('/giris?m=sifre');
+});
+
+// Giriş yapmış kullanıcı kendi şifresini değiştirir.
+app.get('/hesap', auth.requireUser, (req, res) => send(res, views.accountPage({ user: req.user, flash: req.query.m === 'ok' ? 'Şifreniz değiştirildi.' : null })));
+app.post('/hesap', auth.requireUser, (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const password = String(req.body.password || '');
+  const errs = [];
+  if (!auth.verifyPassword(String(req.body.current || ''), user.password_hash)) errs.push('Mevcut şifre hatalı.');
+  if (password.length < 8 || password !== String(req.body.password2 || '')) errs.push('Yeni şifre en az 8 karakter olmalı ve iki alan aynı olmalı.');
+  if (errs.length) return send(res, views.accountPage({ user: req.user, errs }), 400);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(auth.hashPassword(password), user.id);
+  res.redirect('/hesap?m=ok');
+});
+
+// ---------- Yönetim (yalnızca admin): kullanıcılar, şifre sıfırlama, yedekler ----------
+app.get('/yonetim', auth.requireAdmin, (req, res) => {
+  const users = db.prepare(`SELECT u.id, u.username, u.email, u.reset_requested_at, u.created_at,
+      (SELECT COUNT(*) FROM surveys s WHERE s.user_id = u.id) AS survey_count
+    FROM users u ORDER BY u.reset_requested_at IS NULL, u.username`).all();
+  let resetLink = null;
+  if (req.query.sifirla) {
+    const r = db.prepare(`SELECT r.token, u.username, u.email FROM password_resets r JOIN users u ON u.id = r.user_id
+      WHERE r.token = ? AND r.used_at IS NULL`).get(String(req.query.sifirla));
+    if (r) {
+      const url = `${config.baseUrl}/sifre-sifirla/${r.token}`;
+      resetLink = { ...r, url, mailto: outlook.resetLinkMailto({ email: r.email, url, hours: RESET_HOURS }) };
+    }
+  }
+  send(res, views.adminPage({
+    user: req.user, users, resetLink, backups: yedek.listBackups(),
+    s3Enabled: s3.enabled(), localDays: yedek.LOCAL_DAYS, remoteDays: yedek.REMOTE_DAYS,
+    flash: { yedek: 'Yedek alındı.' }[req.query.m],
+  }));
+});
+
+app.post('/yonetim/sifirla/:userId', auth.requireAdmin, (req, res) => {
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(req.params.userId) || 0);
+  if (!target) return res.redirect('/yonetim');
+  const token = crypto.randomBytes(24).toString('base64url');
+  db.prepare('INSERT INTO password_resets (token, user_id, created_by, expires_at) VALUES (?, ?, ?, ?)')
+    .run(token, target.id, req.user.id, new Date(Date.now() + RESET_HOURS * 3600000).toISOString());
+  res.redirect(`/yonetim?sifirla=${token}#sifirla`);
+});
+
+app.post('/yonetim/yedekle', auth.requireAdmin, async (req, res) => {
+  await yedek.runBackup();
+  res.redirect('/yonetim?m=yedek');
+});
+
+app.get('/yonetim/yedek/:file', auth.requireAdmin, (req, res) => {
+  const file = String(req.params.file);
+  if (!/^anket-\d{4}-\d{2}-\d{2}\.db$/.test(file)) return res.redirect('/yonetim');
+  const full = path.join(config.backupDir, file);
+  if (!fs.existsSync(full)) return res.redirect('/yonetim');
+  res.download(full, file);
 });
 
 app.post('/cikis', (req, res) => { auth.endSession(req, res); res.redirect('/giris'); });
@@ -414,9 +520,10 @@ app.get('/k/:token', (req, res) => {
 app.post('/k/:token', (req, res) => {
   const survey = surveyByPublic(req.params.token);
   if (!survey || !isOpen(survey)) return res.redirect(`/k/${encodeURIComponent(req.params.token)}`);
-  const email = field(req.body.email, 120).toLowerCase();
-  if (!surveys.parseEmails(email).valid.length) {
-    return send(res, views.joinPage({ survey, modelCount: surveys.surveyModels(survey.id).length, email, errs: ['Geçerli bir e-posta adresi yazın.'] }), 400);
+  const entered = field(req.body.email, 120);
+  const email = toAddress(entered);
+  if (!email) {
+    return send(res, views.joinPage({ survey, modelCount: surveys.surveyModels(survey.id).length, email: entered, errs: ['Kullanıcı adınızı şirket e-postanızın @ öncesi olarak yazın (ör. ad.soyad).'] }), 400);
   }
   const invitation = surveys.joinSurvey(survey.id, email);
   res.redirect(`/a/${invitation.token}`);
@@ -489,6 +596,8 @@ if (require.main === module) {
   app.listen(config.port, () => {
     console.log(`Model Beğeni Anketi çalışıyor: ${config.baseUrl}`);
     surveys.startScheduler();
+    yedek.backupIfDue();
+    setInterval(() => yedek.backupIfDue(), 60000);
   });
 }
 
