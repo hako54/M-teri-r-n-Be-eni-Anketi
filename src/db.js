@@ -31,9 +31,7 @@ CREATE TABLE IF NOT EXISTS models (
   user_id        INTEGER NOT NULL REFERENCES users(id),
   ana_kumas      TEXT NOT NULL,
   icerik         TEXT NOT NULL,
-  buyer_grup     TEXT,
-  merch_alt_grup TEXT,
-  klasman        TEXT,
+  kirilim        TEXT,                   -- JSON dizi: [Marka Müdürlüğü, Buyer Grup, Merch Alt Grup, Klasman, …]
   -- ab_test = 1: görseller aynı modelin alternatifleri (renk, desen, doku…) ve ayrı ayrı değerlendirilir.
   ab_test        INTEGER NOT NULL DEFAULT 0,
   test_konusu    TEXT,
@@ -54,6 +52,12 @@ CREATE TABLE IF NOT EXISTS surveys (
   title          TEXT NOT NULL,
   closes_at      TEXT NOT NULL,          -- UTC ISO
   result_emails  TEXT NOT NULL,          -- virgülle ayrılmış
+  open_days      INTEGER,
+  open_hour      TEXT,
+  published_at   TEXT,                   -- NULL: taslak; yalnızca test linki çalışır
+  public_token   TEXT,                   -- katılımcı linki
+  test_token     TEXT,                   -- yanıtları kaydetmeyen test linki
+  result_token   TEXT,                   -- giriş gerektirmeyen sonuç sayfası
   closed_at      TEXT,
   result_sent_at TEXT,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
@@ -74,6 +78,7 @@ CREATE TABLE IF NOT EXISTS invitations (
   sent_at      TEXT,
   send_error   TEXT,
   completed_at TEXT,
+  invited      INTEGER NOT NULL DEFAULT 1,  -- 0: davet listesinde yoktu, linkle kendisi katıldı
   UNIQUE (survey_id, email)
 );
 
@@ -111,6 +116,28 @@ CREATE TABLE IF NOT EXISTS outbox (
   html       TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+`);
+
+// Önceki sürümle oluşturulmuş veritabanlarına eksik sütunları ekler.
+function addColumn(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+addColumn('models', 'kirilim', 'TEXT');
+for (const col of ['open_days INTEGER', 'open_hour TEXT', 'published_at TEXT', 'public_token TEXT', 'test_token TEXT', 'result_token TEXT']) {
+  const [name, type] = col.split(' ');
+  addColumn('surveys', name, type);
+}
+addColumn('invitations', 'invited', 'INTEGER NOT NULL DEFAULT 1');
+// Eski anketler zaten gönderilmişti: yayında sayılır ve linkleri üretilir.
+db.exec(`
+  UPDATE surveys SET published_at = created_at WHERE published_at IS NULL AND open_days IS NULL;
+  UPDATE surveys SET public_token = lower(hex(randomblob(16))) WHERE public_token IS NULL;
+  UPDATE surveys SET test_token = lower(hex(randomblob(16))) WHERE test_token IS NULL;
+  UPDATE surveys SET result_token = lower(hex(randomblob(16))) WHERE result_token IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS surveys_public_token ON surveys(public_token);
+  CREATE UNIQUE INDEX IF NOT EXISTS surveys_test_token ON surveys(test_token);
+  CREATE UNIQUE INDEX IF NOT EXISTS surveys_result_token ON surveys(result_token);
 `);
 
 function tx(fn) {

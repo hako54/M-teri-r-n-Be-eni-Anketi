@@ -66,10 +66,6 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea {
 }
 input:focus, textarea:focus { border-color: var(--accent); background: #fff; }
 textarea { resize: vertical; }
-.soon-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-@media (max-width: 640px) { .soon-row { grid-template-columns: 1fr; } }
-.soon input { border: 2px dashed var(--chip) !important; background: transparent !important; cursor: not-allowed; }
-.soon em { background: var(--chip); color: var(--accent-ink); padding: 1px 8px; border-radius: 999px; margin-left: 4px; }
 
 .btn {
   display: inline-flex; justify-content: center; align-items: center; gap: 6px; border: 0; cursor: pointer; text-decoration: none;
@@ -238,3 +234,26 @@ select { width: 100%; background: var(--soft); border: 2px solid transparent; bo
 .result.abr .result-main { order: 3; flex-basis: 100%; }
 .result.abr .avg { margin-left: auto; }
 .result.abr .variants { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+
+/* kırılım, kopyalama, Outlook, test */
+.kirilim { border: 0; margin: 0; padding: 14px; border-radius: 14px; background: var(--soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.kirilim legend { font-weight: 800; padding: 0; float: left; width: 100%; margin-bottom: 2px; }
+.kirilim select { background: #fff; }
+select:disabled { opacity: .55; }
+.kir { margin: 0 4px; font-size: .74rem; color: var(--accent-ink); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-main .kir { margin: 0; white-space: normal; }
+.search { display: flex; flex-wrap: wrap; gap: 8px; }
+.search input, .search select { flex: 1 1 200px; min-width: 0; }
+.copy { display: flex; gap: 8px; flex-wrap: wrap; }
+.copy input { flex: 1 1 220px; min-width: 0; font-size: .88rem; }
+.outlook { background: #0F6CBD; }
+.outlook:hover { background: #0B5394; }
+.testbar { background: var(--warn-bg); color: var(--warn); border-radius: 14px; padding: 10px 14px; font-weight: 700; font-size: .92rem; }
+.testbar b { background: var(--warn); color: #fff; border-radius: 6px; padding: 1px 7px; margin-right: 6px; }
+.stepline { display: flex; gap: 12px; align-items: flex-start; }
+.stepline .num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.stepline p { margin: 2px 0 0; }
+.pick-item .ab { right: 9px; bottom: 30px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions .btn { flex: 1 1 220px; }
+.warn-note { color: var(--warn); font-size: .82rem; font-weight: 700; margin: 0; }

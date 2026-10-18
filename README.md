@@ -4,14 +4,25 @@ Model görsellerini yükleyip mail ile beğeni anketi gönderen, süre dolunca s
 
 ## Neler yapar
 
-- **Tek seferlik hesap:** Kullanıcı adı, e-posta ve şifre ile kayıt; sonra giriş.
+- **Hesap:** Kullanıcı adı, e-posta ve şifre ile tek seferlik kayıt (kayıt kodu gerekir), sonra giriş.
 - **Modeller:** Sınırsız model, her modele birden fazla görsel. Her yeni model otomatik numara alır (`MDL-0001`, `MDL-0002`…). Ana kumaş ve içerik elle yazılır.
-- **Yakında:** Buyer Grup, Merch Alt Grup ve Klasman alanları formda yer tutucu olarak duruyor. Listeler gelince doldurulacak.
-- **Anket:** Modeller seçilir, katılımcı mailleri girilir, kaç gün açık kalacağı ve bitiş saati (Türkiye saati) belirlenir. Her katılımcıya kendine özel linkle davet maili gider.
-- **Katılımcı ekranı:** Telefonda modeller tek tek gösterilir. Her model için 1–5 puan **veya "Tarzım değil"** seçilir; isteğe bağlı yorum yazılır.
-- **"Tarzım değil":** Ortalamaya ve puan sayısına katılmaz, ayrı sayılır.
-- **A/B testi:** Bir modelin görselleri aynı ürünün alternatifleriyse (model rengi, jakar deseni, çizgi renkleri ve yerleşimi, kumaş dokusu, ekose renkleri, baskı) model "A/B testi" olarak işaretlenir. Her görsel bir seçenek olur (A, B, C…) ve isteğe bağlı bir ad alır. Katılımcı her seçeneği ayrı puanlar, sonra "Koleksiyona hangisi girsin?" sorusunda birini ya da "Hiçbiri"ni seçer. Sonuçta her seçeneğin ortalaması ve tercih sayısı görünür; en çok tercih edilen seçenek (eşitlikte yüksek ortalama) kazanan olarak işaretlenir.
-- **Otomatik sonuç:** Bitiş günü ve saatinde anket kapanır; sıralama, puan dağılımı ve yorumları içeren sonuç maili gider. Ekinde Excel'de açılan `sonuclar.csv` ve `yorumlar.csv` dosyaları vardır. İstenirse anket "Şimdi kapat" ile erken bitirilebilir.
+- **Ürün kırılımı:** Marka Müdürlükleri → Gelecek Dönem Buyer Grup → Gelecek Dönem Merch Alt Grup Kod → Gelecek Dönem Ürün Klasman. Alt kırılımlı seçilir: üst seviye seçilince yalnızca ona ait alt seçenekler gelir. Galeri marka müdürlüğüne göre süzülebilir, Excel çıktısında her seviye ayrı sütundur.
+- **A/B testi:** Bir modelin görselleri aynı ürünün alternatifleriyse (model rengi, jakar deseni, çizgi renkleri ve yerleşimi, kumaş dokusu, ekose renkleri, baskı) model "A/B testi" olarak işaretlenir. Her görsel bir seçenek olur (A, B, C…) ve isteğe bağlı bir ad alır. Katılımcı her seçeneği ayrı puanlar, sonra "Koleksiyona hangisi girsin?" sorusunda birini ya da "Hiçbiri"ni seçer. En çok tercih edilen seçenek (eşitlikte yüksek ortalama) kazanır.
+- **Anket gönderme (Outlook):** "Oluştur ve Outlook'ta gönder" anketi canlıya alır ve cihazdaki Outlook'u; alıcılar gizli (BCC), konu ve anket linki hazır bir mail ile açar. Gönderen kişinin kendi şirket hesabı kullanılır. Herkes aynı linki alır; katılımcı linki açınca e-posta adresini yazar ve her adres anketi bir kez doldurabilir.
+- **Taslak:** "Taslak olarak kaydet" ile kaydedilen anket sonra "Gönder" ile canlıya alınır. Gönderilmeyen taslaklar 7 gün sonra otomatik silinir.
+- **Test linki (yalnızca admin):** Admin, anketi canlıya almadan önce katılımcının göreceği şekilde dener; test yanıtları kaydedilmez. Adminler `ADMIN_EMAILS` ayarındaki adreslerle kayıtlı kullanıcılardır.
+- **Katılımcı ekranı:** Telefonda modeller tek tek gösterilir. Her model için 1–5 puan **veya "Tarzım değil"** seçilir (ortalamaya katılmaz); isteğe bağlı yorum yazılır.
+- **Sonuç:** Bitiş günü ve saatinde anket kendiliğinden kapanır. Sonuç sayfası ve "Sonucu Outlook ile paylaş" düğmesi açılır; giriş gerektirmeyen bir sonuç linki paylaşılır. Mail sunucusu (SMTP) ayarlanırsa sonuç maili kapanış anında otomatik de gider.
+
+## Kırılım listesini güncelleme / yeni başlık ekleme
+
+Kırılım listesi `src/kirilim.json` dosyasından okunur ve Excel'den üretilir:
+
+```bash
+python3 scripts/kirilim_excel_to_json.py liste.xlsx
+```
+
+Excel'in ilk satırı başlıklardır ve soldan sağa kırılım sırasını belirler. Yeni bir başlık eklemek için Excel'e sağa yeni bir sütun ekleyip betiği tekrar çalıştırmak yeterli; uygulama başlık sayısından bağımsız çalışır.
 
 Tasarım: `tasarim/tasarim-secenekleri.html` içindeki **B · Yumuşak Pastel** yönü.
 
@@ -25,7 +36,7 @@ npm start          # http://localhost:3000
 npm test           # uçtan uca akış testi
 ```
 
-Mail sunucusu ayarlanmadıysa mailler gönderilmez, uygulamadaki **/giden-kutusu** sayfasına yazılır. Böylece maildeki linke tıklayarak anketi kendiniz deneyebilirsiniz.
+Davetler sunucudan değil, kullanıcının Outlook'undan gider. Mail sunucusu (SMTP) ayarlanmadıysa otomatik sonuç mailleri gönderilmez, uygulamadaki **/giden-kutusu** sayfasına yazılır.
 
 ## Ayarlar
 
@@ -36,6 +47,7 @@ Mail sunucusu ayarlanmadıysa mailler gönderilmez, uygulamadaki **/giden-kutusu
 | `BASE_URL` | Uygulamanın internet adresi. Maildeki linkler ve görseller bununla oluşur. |
 | `DATA_DIR` | Veritabanı ve görsellerin klasörü. Sunucuda **kalıcı disk** olmalı. |
 | `REGISTRATION_CODE` | Doluysa yalnızca bu kodu bilenler hesap açabilir. |
+| `ADMIN_EMAILS` | Admin kullanıcıların e-postaları (noktalı virgül veya virgülle). Test linkini yalnızca onlar görür. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Şirket mail sunucusu (Office 365, Google Workspace vb.) veya bir mail servisi (SendGrid, Resend, Brevo). |
 | `MAIL_FROM` | Gönderen adı ve adresi. |
 

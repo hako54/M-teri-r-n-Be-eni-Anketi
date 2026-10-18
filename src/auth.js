@@ -2,6 +2,8 @@ const crypto = require('node:crypto');
 const { db } = require('./db');
 const config = require('./config');
 
+const isAdminEmail = (email) => config.adminEmails.includes(String(email || '').toLowerCase());
+
 const COOKIE = 'oturum';
 
 function hashPassword(password) {
@@ -47,6 +49,7 @@ function loadUser(req, res, next) {
     req.user = db.prepare(`
       SELECT u.id, u.username, u.email FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ? AND s.expires_at > ?`).get(token, new Date().toISOString());
+    if (req.user) req.user.is_admin = isAdminEmail(req.user.email);
   }
   next();
 }
@@ -56,4 +59,10 @@ function requireUser(req, res, next) {
   next();
 }
 
-module.exports = { hashPassword, verifyPassword, startSession, endSession, loadUser, requireUser };
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.redirect('/giris');
+  if (!req.user.is_admin) return res.status(403).type('html').send('Bu sayfa yalnızca admin içindir.');
+  next();
+}
+
+module.exports = { hashPassword, verifyPassword, startSession, endSession, loadUser, requireUser, requireAdmin };

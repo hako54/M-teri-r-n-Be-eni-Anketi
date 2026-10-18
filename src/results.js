@@ -1,4 +1,5 @@
 const { db, modelCode, modelImages, isAbTest } = require('./db');
+const kirilim = require('./kirilim');
 
 function firstImage(modelId) {
   const row = db.prepare('SELECT filename FROM model_images WHERE model_id = ? ORDER BY sort_order, id LIMIT 1').get(modelId);
@@ -29,7 +30,7 @@ function computeResults(surveyId) {
   const survey = db.prepare('SELECT * FROM surveys WHERE id = ?').get(surveyId);
   if (!survey) return null;
 
-  const invited = db.prepare('SELECT COUNT(*) AS n FROM invitations WHERE survey_id = ?').get(surveyId).n;
+  const invited = db.prepare('SELECT COUNT(*) AS n FROM invitations WHERE survey_id = ? AND invited = 1').get(surveyId).n;
   const completed = db.prepare('SELECT COUNT(*) AS n FROM invitations WHERE survey_id = ? AND completed_at IS NOT NULL').get(surveyId).n;
 
   const models = db.prepare(`
@@ -57,6 +58,7 @@ function computeResults(surveyId) {
       code: modelCode(m.id),
       ana_kumas: m.ana_kumas,
       icerik: m.icerik,
+      kirilim: kirilim.parse(m.kirilim),
       image: images[0] ? images[0].filename : null,
       ab,
       test_konusu: ab ? m.test_konusu : null,
@@ -121,18 +123,19 @@ function toCsv(rows) {
 
 // A/B modellerinde her varyant ayrı satırdır.
 function resultsCsv(results) {
-  const header = ['Sıra', 'Model No', 'Ana Kumaş', 'İçerik', 'Test Konusu', 'Varyant', 'Varyant Adı', 'Ortalama', 'Puan Veren', 'Tarzım Değil', '1', '2', '3', '4', '5', 'Koleksiyon Tercihi', 'Kazanan'];
+  const header = ['Sıra', 'Model No', 'Ana Kumaş', 'İçerik', ...kirilim.levels, 'Test Konusu', 'Varyant', 'Varyant Adı', 'Ortalama', 'Puan Veren', 'Tarzım Değil', '1', '2', '3', '4', '5', 'Koleksiyon Tercihi', 'Kazanan'];
   const body = [];
   results.models.forEach((m, i) => {
+    const head = [i + 1, m.code, m.ana_kumas, m.icerik, ...kirilim.levels.map((_, k) => m.kirilim[k] || '')];
     if (!m.ab) {
-      body.push([i + 1, m.code, m.ana_kumas, m.icerik, '', '', '', formatAvg(m.avg), m.scored, m.notMyStyle, ...m.dist, '', '']);
+      body.push([...head, '', '', '', formatAvg(m.avg), m.scored, m.notMyStyle, ...m.dist, '', '']);
       return;
     }
     for (const v of m.variants) {
-      body.push([i + 1, m.code, m.ana_kumas, m.icerik, m.test_konusu, v.letter, v.label, formatAvg(v.avg), v.scored, v.notMyStyle, ...v.dist,
+      body.push([...head, m.test_konusu, v.letter, v.label, formatAvg(v.avg), v.scored, v.notMyStyle, ...v.dist,
         v.picks, m.winner && m.winner.imageId === v.imageId ? 'Evet' : '']);
     }
-    body.push([i + 1, m.code, m.ana_kumas, m.icerik, m.test_konusu, '–', 'Hiçbiri', '', '', '', '', '', '', '', '', m.noPick, '']);
+    body.push([...head, m.test_konusu, '–', 'Hiçbiri', '', '', '', '', '', '', '', '', m.noPick, '']);
   });
   return toCsv([header, ...body]);
 }

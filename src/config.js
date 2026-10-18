@@ -19,4 +19,6 @@ module.exports = {
   // Türkiye 2016'dan beri yıl boyu UTC+3 kullanıyor.
   tzOffsetMinutes: 180,
   sessionDays: 30,
+  // Bu adreslerle kayıtlı kullanıcılar admindir (test linki). Virgül veya noktalı virgülle ayrılır.
+  adminEmails: (process.env.ADMIN_EMAILS || '').split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean),
 };

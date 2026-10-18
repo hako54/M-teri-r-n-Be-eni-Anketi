@@ -2,12 +2,10 @@ const { html, raw } = require('./html');
 const { modelCode, TEST_KONULARI } = require('./db');
 const { formatTR } = require('./time');
 const { formatAvg } = require('./results');
+const kirilim = require('./kirilim');
+const { DRAFT_DAYS, draftExpiresAt } = require('./surveys');
 
-const SOON_FIELDS = [
-  ['buyer_grup', 'Buyer Grup'],
-  ['merch_alt_grup', 'Merch Alt Grup'],
-  ['klasman', 'Klasman'],
-];
+const draftNote = (survey) => `Taslaklar ${DRAFT_DAYS} gün içinde gönderilmezse otomatik silinir. Bu taslak ${formatTR(draftExpiresAt(survey))} tarihinde silinecek.`;
 
 function layout({ title, user, body, nav = true, active = '' }) {
   const link = (href, label, key) => html`<a href="${href}" class="${active === key ? 'on' : ''}">${label}</a>`;
@@ -61,13 +59,19 @@ function thumb(filename, cls = '') {
     : html`<div class="ph ph-empty ${cls}">Görsel yok</div>`;
 }
 
-function modelsPage({ user, models, q }) {
+function modelsPage({ user, models, q, marka, markas = [] }) {
+  const filtered = Boolean(q || marka);
   return layout({
     title: 'Modeller', user, active: 'modeller',
     body: html`
     <div class="head">
-      <div><h1>Modellerim</h1><p class="sub">${models.length} model${models[0] ? ` · son eklenen ${modelCode(models[0].id)}` : ''}</p></div>
-      <form class="search" method="get"><input id="q" name="q" placeholder="Numara, kumaş veya içerik ara" value="${q || ''}"></form>
+      <div><h1>Modellerim</h1><p class="sub">${models.length} model${models[0] && !filtered ? ` · son eklenen ${modelCode(models[0].id)}` : ''}</p></div>
+      <form class="search" method="get">
+        <input id="q" name="q" placeholder="Numara, kumaş, içerik, grup ara" value="${q || ''}">
+        ${markas.length ? html`<select id="marka" name="marka" aria-label="${kirilim.levels[0]}" onchange="this.form.submit()">
+          <option value="">Tüm ${kirilim.levels[0].toLocaleLowerCase('tr')}</option>
+          ${markas.map((mk) => html`<option ${mk === marka ? 'selected' : ''}>${mk}</option>`)}</select>` : ''}
+      </form>
     </div>
     <div class="gallery">
       <a class="add-tile" href="/modeller/yeni"><b>+</b><span>Yeni model</span></a>
@@ -75,16 +79,29 @@ function modelsPage({ user, models, q }) {
         <a class="tile" href="/modeller/${m.id}">
           <div class="tile-img">${thumb(m.image)}<span class="no">${modelCode(m.id)}</span>${m.ab_test && m.image_count > 1 ? html`<span class="ab">A/B · ${m.image_count} seçenek</span>` : m.image_count > 1 ? html`<span class="count">${m.image_count} görsel</span>` : ''}</div>
           <b>${m.ana_kumas}</b><span>${m.icerik}</span>
+          ${m.kirilim.length > 1 ? html`<span class="kir">${m.kirilim.slice(1).join(' · ')}</span>` : ''}
         </a>`)}
     </div>
-    ${!models.length && !q ? html`<p class="empty">Henüz model yok. <a href="/modeller/yeni">İlk modeli ekleyin</a>; numarası otomatik verilir.</p>` : ''}
-    ${!models.length && q ? html`<p class="empty">“${q}” ile eşleşen model yok.</p>` : ''}`,
+    ${!models.length && !filtered ? html`<p class="empty">Henüz model yok. <a href="/modeller/yeni">İlk modeli ekleyin</a>; numarası otomatik verilir.</p>` : ''}
+    ${!models.length && filtered ? html`<p class="empty">Bu aramayla eşleşen model yok. <a href="/modeller">Filtreyi temizle</a></p>` : ''}`,
   });
 }
 
-function soonFields(model = {}) {
-  return html`<div class="soon-row">${SOON_FIELDS.map(([key, label]) => html`
-    <label class="field soon"><span>${label} <em>yakında</em></span><input id="${key}" disabled placeholder="${model[key] || 'Liste yakında eklenecek'}"></label>`)}</div>`;
+// Alt kırılımlı seçim: her seviye bir öncekine göre dolar. Seviye sayısı kirilim.json'daki başlıklardan gelir.
+function kirilimFields(value) {
+  const path = Array.isArray(value) ? value : kirilim.parse(value);
+  return html`<fieldset class="kirilim" id="kirilim">
+    <legend>Ürün kırılımı</legend>
+    ${kirilim.levels.map((label, i) => {
+    const opts = i <= path.length ? kirilim.options(path.slice(0, i)) : [];
+    return html`<label class="field"><span>${label}</span>
+      <select id="k${i}" name="k${i}" data-level="${i}" ${i > path.length ? 'disabled' : ''}>
+        <option value="">${i > path.length ? `Önce ${kirilim.levels[i - 1].toLocaleLowerCase('tr')} seçin` : 'Seçin'}</option>
+        ${opts.map((o) => html`<option ${path[i] === o ? 'selected' : ''}>${o}</option>`)}
+      </select></label>`;
+  })}
+  </fieldset>
+  <script src="/static/kirilim.js"></script>`;
 }
 
 function modelFormPage({ user, model, images = [], nextCode, values = {}, errs }) {
@@ -118,7 +135,7 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs }
       </fieldset>
       <label class="field"><span>Ana kumaş</span><input id="ana_kumas" name="ana_kumas" required maxlength="120" placeholder="ör. Viskon krep" value="${v.ana_kumas || ''}"></label>
       <label class="field"><span>İçerik</span><input id="icerik" name="icerik" required maxlength="200" placeholder="ör. %100 Viskon" value="${v.icerik || ''}"></label>
-      ${soonFields(v)}
+      ${kirilimFields(v.kirilim)}
       <button class="btn">${isNew ? 'Modeli kaydet' : 'Değişiklikleri kaydet'}</button>
     </div>
     </form>
@@ -126,12 +143,18 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs }
   });
 }
 
+function surveyState(s) {
+  if (!s.published_at) return 'taslak';
+  if (s.closed_at || new Date(s.closes_at) <= new Date()) return 'kapali';
+  return 'acik';
+}
+
 function surveysPage({ user, surveys }) {
-  const status = (s) => {
-    if (s.result_sent_at) return html`<span class="pill done">Sonuç gönderildi</span>`;
-    if (s.closed_at || new Date(s.closes_at) <= new Date()) return html`<span class="pill wait">Kapanıyor</span>`;
-    return html`<span class="pill open">Açık</span>`;
-  };
+  const status = (s) => ({
+    taslak: html`<span class="pill wait">Taslak</span>`,
+    acik: html`<span class="pill open">Canlıda</span>`,
+    kapali: html`<span class="pill done">Kapandı</span>`,
+  })[surveyState(s)];
   return layout({
     title: 'Anketler', user, active: 'anketler',
     body: html`
@@ -139,7 +162,8 @@ function surveysPage({ user, surveys }) {
       <a class="btn btn-sm" href="/anketler/yeni">+ Yeni anket</a></div>
     <div class="list">
       ${surveys.map((s) => html`<a class="row card" href="/anketler/${s.id}">
-        <div class="row-main"><b>${s.title}</b><span class="sub">${s.model_count} model · ${s.completed}/${s.invited} yanıt · kapanış ${formatTR(s.closes_at)}</span></div>
+        <div class="row-main"><b>${s.title}</b><span class="sub">${s.model_count} model · ${s.completed}/${s.invited} yanıt · ${s.published_at ? `kapanış ${formatTR(s.closes_at)}` : `gönderilince ${s.open_days} gün açık kalır`}</span>
+          ${s.published_at ? '' : html`<small class="warn-note">${formatTR(draftExpiresAt(s))} tarihinde silinecek</small>`}</div>
         ${status(s)}</a>`)}
     </div>
     ${!surveys.length ? html`<p class="empty">Henüz anket yok. Önce modelleri ekleyin, sonra <a href="/anketler/yeni">anket oluşturun</a>.</p>` : ''}`,
@@ -152,7 +176,7 @@ function newSurveyPage({ user, models, values = {}, errs }) {
     title: 'Yeni anket', user, active: 'anketler',
     body: html`
     <a class="back" href="/anketler">← Anketler</a>
-    <div class="head"><div><h1>Anket oluştur</h1><p class="sub">Modelleri seçin, kişileri ekleyin, süreyi belirleyin.</p></div></div>
+    <div class="head"><div><h1>Anket oluştur</h1><p class="sub">Modelleri seçin, kişileri ekleyin, süreyi belirleyin. Hemen gönderebilir ya da taslak olarak kaydedip sonra gönderebilirsiniz.</p></div></div>
     ${errors(errs)}
     <form class="stack" method="post" action="/anketler">
       <div class="card stack">
@@ -162,13 +186,13 @@ function newSurveyPage({ user, models, values = {}, errs }) {
         <div class="label">Modeller <span class="sub" id="selcount"></span></div>
         ${models.length ? html`<div class="pick">${models.map((m) => html`
           <label class="pick-item"><input type="checkbox" name="models" value="${m.id}" ${selected.has(m.id) ? 'checked' : ''}>
-            ${thumb(m.image)}<span class="no">${modelCode(m.id)}</span><small>${m.ana_kumas}</small></label>`)}</div>`
+            ${thumb(m.image)}<span class="no">${modelCode(m.id)}</span>${m.ab_test && m.image_count > 1 ? html`<span class="ab">A/B</span>` : ''}<small>${m.ana_kumas}</small></label>`)}</div>`
     : html`<p class="empty">Önce <a href="/modeller/yeni">model ekleyin</a>.</p>`}
       </div>
       <div class="card stack">
         <label class="field"><span>Kime gönderilsin?</span>
           <textarea id="emails" name="emails" rows="4" required placeholder="mehmet@firma.com.tr&#10;selin@magaza.com">${values.emails || ''}</textarea>
-          <small>Her satıra bir adres ya da virgülle ayırın. Her kişiye kendi linki gönderilir.</small></label>
+          <small>Her satıra bir adres ya da virgülle ayırın. Gönderirken bu adresler Outlook'ta gizli alıcı (BCC) olarak eklenir.</small></label>
       </div>
       <div class="card stack">
         <div class="two">
@@ -182,42 +206,31 @@ function newSurveyPage({ user, models, values = {}, errs }) {
         <label class="field"><span>Sonuç kime gelsin?</span><input id="result_emails" name="result_emails" required value="${values.result_emails ?? user.email}">
           <small>Birden fazla adresi virgülle ayırın.</small></label>
       </div>
-      <button class="btn">Anketi başlat ve davetleri gönder</button>
+      <div class="actions">
+        <button class="btn" name="action" value="gonder">Oluştur ve Outlook'ta gönder</button>
+        <button class="btn btn-soft" name="action" value="taslak">Taslak olarak kaydet</button>
+      </div>
+      <p class="sub small">Taslaklar ${DRAFT_DAYS} gün içinde gönderilmezse otomatik silinir.</p>
     </form>
     <script src="/static/anket-olustur.js"></script>`,
   });
 }
 
-function surveyDetailPage({ user, results, invitations, smtpReady, flash }) {
-  const { survey, invited, completed, models } = results;
-  const isClosed = Boolean(survey.closed_at) || new Date(survey.closes_at) <= new Date();
-  const failed = invitations.filter((i) => i.send_error && !i.sent_at).length;
-  const rate = invited ? Math.round((completed / invited) * 100) : 0;
-  return layout({
-    title: survey.title, user, active: 'anketler',
-    body: html`
-    <a class="back" href="/anketler">← Anketler</a>
-    <div class="head"><div><h1>${survey.title}</h1>
-      <p class="sub">${isClosed ? `Kapandı · ${formatTR(survey.closed_at || survey.closes_at)}` : `Açık · ${formatTR(survey.closes_at)} tarihinde kapanır`}
-      ${survey.result_sent_at ? ` · sonuç ${survey.result_emails.replace(/,/g, ', ')} adresine gönderildi` : ''}</p></div></div>
-    ${flash ? html`<div class="ok">${flash}</div>` : ''}
-    ${!smtpReady ? html`<div class="info">Mail sunucusu henüz ayarlı değil. Mailler gerçekten gönderilmiyor, <a href="/giden-kutusu">Giden kutusu</a> sayfasında görebilirsiniz.</div>` : ''}
-    <div class="stats">
-      <div class="card stat"><div class="ring" style="--p:${rate}"><b>%${rate}</b></div><div><b>${completed} / ${invited}</b><div class="sub">kişi yanıtladı</div></div></div>
-      <div class="card stat-actions">
-        ${!survey.result_sent_at ? html`<form method="post" action="/anketler/${survey.id}/kapat"><button class="btn btn-sm">${isClosed ? 'Sonucu şimdi gönder' : 'Şimdi kapat ve sonucu gönder'}</button></form>` : ''}
-        ${failed && !isClosed ? html`<form method="post" action="/anketler/${survey.id}/yeniden-gonder"><button class="btn btn-sm btn-soft">${failed} gönderilemeyen daveti tekrar dene</button></form>` : ''}
-        <a class="btn btn-sm btn-soft" href="/anketler/${survey.id}/sonuclar.csv">Sonuçları indir (Excel)</a>
-      </div>
-    </div>
-    <h2>Sonuçlar ${isClosed ? '' : html`<span class="sub">· anlık</span>`}</h2>
-    <p class="sub">Ortalama yalnızca 1–5 puanlardan hesaplanır. “Tarzım değil” yanıtları ortalamaya katılmaz.</p>
-    <div class="list">
+function copyField(id, label, value, openLabel) {
+  return html`<div class="field"><span>${label}</span>
+    <div class="copy"><input id="${id}" readonly value="${value}">
+      <button type="button" class="btn btn-sm btn-soft" data-copy="${id}">Kopyala</button>
+      ${openLabel ? html`<a class="btn btn-sm btn-soft" href="${value}" target="_blank" rel="noopener">${openLabel}</a>` : ''}</div></div>`;
+}
+
+function resultsList(models) {
+  return html`<div class="list">
       ${models.map((m, i) => html`<div class="card result ${m.ab ? 'abr' : ''}">
         <div class="rank">${i + 1}</div>
         ${thumb(m.image, 'sm')}
         <div class="result-main">
           <div><b>${m.code}</b> <span class="sub">· ${m.ana_kumas} · ${m.icerik}</span></div>
+          ${m.kirilim.length ? html`<div class="kir">${m.kirilim.join(' · ')}</div>` : ''}
           <div class="meter"><i style="width:${m.avg === null ? 0 : Math.round((m.avg / 5) * 100)}%"></i></div>
           ${m.ab ? html`<div class="sub"><span class="ab inline">A/B</span> ${m.test_konusu || 'Seçenek karşılaştırması'} · ${m.winner ? html`önde: <b>${m.winner.letter}${m.winner.label ? ` · ${m.winner.label}` : ''}</b>` : 'henüz oy yok'}</div>
           <div class="variants">${m.variants.map((v) => html`<div class="variant ${m.winner && m.winner.imageId === v.imageId ? 'win' : ''}">
@@ -233,13 +246,81 @@ function surveyDetailPage({ user, results, invitations, smtpReady, flash }) {
         </div>
         <div class="avg">${formatAvg(m.avg)}</div>
       </div>`)}
-    </div>
+    </div>`;
+}
+
+function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, smtpReady, flash, autoOpenOutlook, links, invite, invitedEmails, resultMailto }) {
+  const { survey, invited, completed, models } = results;
+  const state = surveyState(survey);
+  const rate = invited ? Math.min(100, Math.round((completed / invited) * 100)) : 0;
+  const subline = {
+    taslak: `Taslak · gönderilince ${survey.open_days} gün açık kalır, ${survey.open_hour}'de kapanır`,
+    acik: `Canlıda · ${formatTR(survey.closes_at)} tarihinde kapanır`,
+    kapali: `Kapandı · ${formatTR(survey.closed_at || survey.closes_at)}`,
+  }[state];
+
+  const draftPanel = html`
+    <div class="card stack steps-card">
+      ${isAdmin ? html`
+      <div class="stepline"><span class="num">1</span><div><b>Test edin <span class="pill">Admin</span></b><p class="sub">Anketi katılımcının göreceği şekilde deneyin. Test yanıtları kaydedilmez.</p></div></div>
+      ${copyField('testlink', 'Test linki', links.test, 'Testi aç')}
+      ${testMailto ? html`<a class="btn btn-sm btn-soft" href="${testMailto}">Test linkini adminlere Outlook ile gönder</a>` : ''}
+      <div class="stepline"><span class="num">2</span><div><b>Gönderin</b><p class="sub">Kapanış zamanı gönderdiğiniz andan itibaren hesaplanır. Outlook, ${invitedEmails.length} alıcı ve anket linkiyle hazır bir mail açar.</p></div></div>`
+    : html`<div><b>Göndermeye hazır olduğunuzda</b><p class="sub">Kapanış zamanı gönderdiğiniz andan itibaren hesaplanır. Outlook, ${invitedEmails.length} alıcı ve anket linkiyle hazır bir mail açar.</p></div>`}
+      <form method="post" action="/anketler/${survey.id}/yayinla"><button class="btn outlook">Gönder ve Outlook'ta aç</button></form>
+      <p class="warn-note">${draftNote(survey)}</p>
+    </div>`;
+
+  const livePanel = html`
+    <div class="card stack">
+      <div class="label">Davet maili</div>
+      <a class="btn outlook" id="outlook" href="${invite ? invite.href : '#'}">Outlook'ta aç</a>
+      ${invite && !invite.recipientsIncluded ? html`<div class="info">Alıcı listesi Outlook linkine sığmadı. Mail alıcısız açılır; aşağıdan adresleri kopyalayıp “Gizli” (BCC) alanına yapıştırın.</div>` : ''}
+      <p class="sub">Outlook açılmazsa cihazınızda varsayılan mail uygulaması olarak Outlook'u seçin ya da aşağıdaki metinleri kopyalayıp kendiniz gönderin.</p>
+      <details><summary>Alıcılar ve mail metni</summary>
+        <div class="stack" style="margin-top:10px">
+          ${copyField('alicilar', `Alıcılar (${invitedEmails.length})`, invitedEmails.join('; '))}
+          ${invite ? html`<label class="field"><span>Mail metni</span><textarea id="mailbody" rows="8" readonly>${invite.body}</textarea>
+            <button type="button" class="btn btn-sm btn-soft" data-copy="mailbody">Metni kopyala</button></label>` : ''}
+        </div>
+      </details>
+      ${copyField('katilimlink', 'Katılımcı linki', links.public)}
+      ${isAdmin ? copyField('testlink', 'Test linki (yalnızca admin, yanıt kaydetmez)', links.test, 'Testi aç') : ''}
+    </div>`;
+
+  return layout({
+    title: survey.title, user, active: 'anketler',
+    body: html`
+    <a class="back" href="/anketler">← Anketler</a>
+    <div class="head"><div><h1>${survey.title}</h1><p class="sub">${subline}</p></div>
+      ${state === 'taslak' ? html`<span class="pill wait">Taslak</span>` : ''}</div>
+    ${flash ? html`<div class="ok">${flash}</div>` : ''}
+    ${state === 'taslak' ? draftPanel : ''}
+    ${state === 'acik' ? livePanel : ''}
+    ${state !== 'taslak' ? html`<div class="stats">
+      <div class="card stat"><div class="ring" style="--p:${rate}"><b>%${rate}</b></div><div><b>${completed} / ${invited}</b><div class="sub">davetli yanıtladı</div></div></div>
+      <div class="card stat-actions">
+        ${state === 'acik' ? html`<form method="post" action="/anketler/${survey.id}/kapat"><button class="btn btn-sm">Şimdi kapat</button></form>` : ''}
+        ${state === 'kapali' ? html`<a class="btn btn-sm outlook" href="${resultMailto}">Sonucu Outlook ile paylaş</a>` : ''}
+        <a class="btn btn-sm btn-soft" href="/anketler/${survey.id}/sonuclar.csv">Sonuçları indir (Excel)</a>
+      </div>
+    </div>` : ''}
+    ${state === 'kapali' ? html`<div class="card stack">${copyField('sonuclink', 'Sonuç sayfası (giriş gerektirmez)', links.result, 'Aç')}
+      <p class="sub">${smtpReady ? (survey.result_sent_at ? `Sonuç maili ${survey.result_emails.replace(/,/g, ', ')} adresine otomatik gönderildi.` : 'Sonuç maili gönderiliyor.') : `Sonuç ${survey.result_emails.replace(/,/g, ', ')} adresine “Sonucu Outlook ile paylaş” ile gönderilir.`}</p></div>` : ''}
+    ${state !== 'taslak' ? html`
+    <h2>Sonuçlar ${state === 'acik' ? html`<span class="sub">· anlık</span>` : ''}</h2>
+    <p class="sub">Ortalama yalnızca 1–5 puanlardan hesaplanır. “Tarzım değil” yanıtları ortalamaya katılmaz.</p>
+    ${resultsList(models)}
     <h2>Katılımcılar</h2>
-    <div class="card"><table class="tbl"><thead><tr><th>E-posta</th><th>Davet</th><th>Durum</th></tr></thead><tbody>
+    <div class="card"><table class="tbl"><thead><tr><th>E-posta</th><th>Liste</th><th>Durum</th></tr></thead><tbody>
       ${invitations.map((i) => html`<tr><td>${i.email}</td>
-        <td class="nw">${i.sent_at ? 'Gönderildi' : i.send_error ? html`<span class="err" title="${i.send_error}">Gönderilemedi</span>` : 'Bekliyor'}</td>
+        <td class="nw">${i.invited ? 'Davetli' : html`<span class="sub">Linkle katıldı</span>`}</td>
         <td class="nw">${i.completed_at ? html`<span class="pill done">Tamamladı</span>` : html`<span class="pill">Bekleniyor</span>`}</td></tr>`)}
-    </tbody></table></div>`,
+    </tbody></table></div>` : html`
+    <h2>Ankette ${models.length} model var</h2>
+    <div class="pick">${models.map((m) => html`<div class="pick-item">${thumb(m.image)}<span class="no">${m.code}</span>${m.ab ? html`<span class="ab">A/B</span>` : ''}<small>${m.ana_kumas}</small></div>`)}</div>`}
+    <script src="/static/kopyala.js"></script>
+    ${autoOpenOutlook && invite ? raw(`<script>setTimeout(function(){var a=document.getElementById('outlook');if(a)window.location.href=a.href;},400);</script>`) : ''}`,
   });
 }
 
@@ -269,13 +350,15 @@ function abStep(m) {
     </fieldset>`;
 }
 
-function participantPage({ survey, invitation, models }) {
+function participantPage({ survey, models, email, test = false }) {
   const total = models.length;
   return layout({
     title: survey.title, nav: false,
     body: html`
     <form class="survey" method="post" id="survey">
-      <div class="survey-head"><div class="sub">${total} model · ${formatTR(survey.closes_at)} tarihine kadar açık</div><h1>${survey.title}</h1>
+      ${test ? html`<div class="testbar"><b>TEST</b> Bu bir deneme. Yanıtlar kaydedilmez ve sonuçlara katılmaz.</div>` : ''}
+      <div class="survey-head"><div class="sub">${total} model · ${survey.published_at ? `${formatTR(survey.closes_at)} tarihine kadar açık` : 'henüz canlıda değil'}</div><h1>${survey.title}</h1>
+        ${email ? html`<div class="sub">${email}</div>` : ''}
         <div class="dots" aria-hidden="true">${models.map((_, i) => html`<i class="${i === 0 ? 'on' : ''}"></i>`)}</div></div>
       ${models.map((m, i) => html`
       <section class="step card" data-step="${i}">
@@ -287,19 +370,50 @@ function participantPage({ survey, invitation, models }) {
         <label class="field"><span>Yorumunuz <em>isteğe bağlı</em></span><textarea name="c_${m.id}" rows="2" maxlength="1000" placeholder="Kalıp, renk, kumaş hakkında bir not…"></textarea></label>
         <div class="step-nav">
           ${i > 0 ? html`<button type="button" class="btn btn-soft" data-go="-1">Geri</button>` : ''}
-          ${i < total - 1 ? html`<button type="button" class="btn" data-go="1">Sonraki</button>` : html`<button class="btn">Anketi gönder</button>`}
+          ${i < total - 1 ? html`<button type="button" class="btn" data-go="1">Sonraki</button>` : html`<button class="btn">${test ? 'Testi bitir' : 'Anketi gönder'}</button>`}
         </div>
       </section>`)}
-      <input type="hidden" name="token" value="${invitation.token}">
     </form>
     <script src="/static/anket.js"></script>`,
   });
 }
 
-function messagePage({ title, text }) {
+// Ortak linkten gelen katılımcı e-postasını yazar.
+function joinPage({ survey, modelCount, email = '', errs }) {
+  return layout({
+    title: survey.title, nav: false,
+    body: html`
+    <div class="auth">
+      <div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div>
+      <h1>${survey.title}</h1>
+      <p class="sub">${modelCount} model · ${formatTR(survey.closes_at)} tarihine kadar açık. Başlamak için şirket e-posta adresinizi yazın.</p>
+      ${errors(errs)}
+      <form method="post" class="stack">
+        <label class="field"><span>E-posta</span><input id="email" name="email" type="email" required autocomplete="email" inputmode="email" value="${email}"></label>
+        <button class="btn">Ankete başla</button>
+      </form>
+      <p class="center small sub">Her adres anketi bir kez doldurabilir.</p>
+    </div>`,
+  });
+}
+
+function publicResultPage({ results }) {
+  const { survey, invited, completed, models } = results;
+  return layout({
+    title: `Sonuç: ${survey.title}`, nav: false,
+    body: html`
+    <div class="head"><div><div class="sub">Anket sonucu</div><h1>${survey.title}</h1>
+      <p class="sub">Kapandı · ${formatTR(survey.closed_at || survey.closes_at)} · ${completed} yanıt (${invited} davetli)</p></div></div>
+    <p class="sub">Ortalama yalnızca 1–5 puanlardan hesaplanır. “Tarzım değil” yanıtları ortalamaya katılmaz.</p>
+    ${resultsList(models)}`,
+  });
+}
+
+function messagePage({ title, text, link }) {
   return layout({
     title, nav: false,
-    body: html`<div class="auth center"><div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div><h1>${title}</h1><p class="sub">${text}</p></div>`,
+    body: html`<div class="auth center"><div class="auth-art" aria-hidden="true"><i class="sw sw1"></i><i class="sw sw2"></i></div><h1>${title}</h1><p class="sub">${text}</p>
+      ${link ? html`<a class="btn btn-soft" href="${link.href}">${link.label}</a>` : ''}</div>`,
   });
 }
 
@@ -307,7 +421,7 @@ function outboxPage({ user, mails }) {
   return layout({
     title: 'Giden kutusu', user,
     body: html`
-    <div class="head"><div><h1>Giden kutusu</h1><p class="sub">Mail sunucusu ayarlanana kadar gönderilecek mailler burada birikir. Link ile anketi kendiniz deneyebilirsiniz.</p></div></div>
+    <div class="head"><div><h1>Giden kutusu</h1><p class="sub">Mail sunucusu ayarlı olmadığı için otomatik sonuç mailleri burada birikir.</p></div></div>
     <div class="list">${mails.map((m) => html`<a class="row card" href="/giden-kutusu/${m.id}"><div class="row-main"><b>${m.subject}</b><span class="sub">${m.to_addr} · ${formatTR(m.created_at.replace(' ', 'T') + 'Z')}</span></div></a>`)}</div>
     ${!mails.length ? html`<p class="empty">Henüz mail yok.</p>` : ''}`,
   });
@@ -315,5 +429,5 @@ function outboxPage({ user, mails }) {
 
 module.exports = {
   authPage, modelsPage, modelFormPage, surveysPage, newSurveyPage, surveyDetailPage,
-  participantPage, messagePage, outboxPage, raw,
+  participantPage, joinPage, publicResultPage, messagePage, outboxPage, raw,
 };

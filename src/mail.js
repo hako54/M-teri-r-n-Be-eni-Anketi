@@ -46,23 +46,6 @@ function imgUrl(filename) {
   return `${config.baseUrl}/uploads/${encodeURIComponent(filename)}`;
 }
 
-function inviteEmail({ survey, ownerName, token, models }) {
-  const link = `${config.baseUrl}/a/${token}`;
-  const thumbs = models.slice(0, 4).map((m) => (m.image
-    ? `<td style="padding:3px" width="25%"><img src="${imgUrl(m.image)}" alt="${m.code}" width="120" style="width:100%;max-width:120px;border-radius:12px;display:block"></td>`
-    : '')).join('');
-  const inner = html`
-    <div style="font-size:22px;font-weight:800;margin:0 0 6px">${survey.title}</div>
-    <div style="font-size:14px;color:${C.muted};margin:0 0 16px">${ownerName} sizden ${models.length} model için görüşünüzü istiyor.</div>
-    ${thumbs ? raw(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px"><tr>${thumbs}</tr></table>`) : ''}
-    <div style="font-size:14px;line-height:1.55;margin:0 0 18px">Her modeli 1–5 arası puanlayın. Size uygun değilse <b>Tarzım değil</b> seçebilirsiniz; bu seçim ortalamaya katılmaz. Dilerseniz yorum da bırakabilirsiniz.</div>
-    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:${C.accent};border-radius:999px">
-      <a href="${link}" style="display:inline-block;padding:13px 30px;color:#fff;font-weight:800;font-size:15px;text-decoration:none">Ankete katıl</a>
-    </td></tr></table>
-    <div style="font-size:12px;color:${C.muted};margin-top:16px">Anket <b>${formatTR(survey.closes_at)}</b> tarihinde kapanır.<br>Buton çalışmazsa bu adresi açın: ${link}</div>`;
-  return shell(survey.title, card(inner.toString()));
-}
-
 // A/B modeli: seçenekler yan yana, kazanan vurgulu.
 function abBlock(m) {
   const cells = m.variants.map((v) => {
@@ -119,9 +102,9 @@ function resultEmail(results) {
   const list = html`
     <div style="font-size:15px;font-weight:800;margin-bottom:4px">Model sıralaması</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
-    <div style="font-size:12px;color:${C.muted};margin-top:12px">Ekte Excel ile açılabilen sonuç ve yorum dosyaları var. Ayrıntılar: ${config.baseUrl}/anketler/${survey.id}</div>`;
+    <div style="font-size:12px;color:${C.muted};margin-top:12px">Ekte Excel ile açılabilen sonuç ve yorum dosyaları var. Ayrıntılar: ${config.baseUrl}/sonuc/${survey.result_token}</div>`;
 
   return shell(`Sonuç: ${survey.title}`, card(summary.toString()) + card(list.toString(), 18));
 }
 
-module.exports = { sendMail, inviteEmail, resultEmail, smtpReady };
+module.exports = { sendMail, resultEmail, smtpReady };

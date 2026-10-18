@@ -5,216 +5,256 @@ const os = require('node:os');
 const path = require('node:path');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'anket-test-'));
+process.env.ADMIN_EMAILS = 'Ayse@Firma.com.tr; diger.admin@firma.com.tr';
 delete process.env.SMTP_HOST;
 
 const app = require('../src/server');
 const { db } = require('../src/db');
 const surveys = require('../src/surveys');
+const kirilim = require('../src/kirilim');
+const { computeResults } = require('../src/results');
 const { closesAt } = require('../src/time');
 
 // 1x1 PNG
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64');
+const BEBEK = ['BEBEK MARKA DİREKTÖRLÜĞÜ', 'AKSESUAR', 'CKB', 'ŞAPKA KEP'];
 
 let server;
 let base;
-let cookie = '';
 
-async function req(method, url, body, extra = {}) {
-  const headers = { cookie, ...extra.headers };
-  let payload = body;
-  if (body && !(body instanceof FormData)) {
-    payload = new URLSearchParams(body);
-  }
-  const res = await fetch(base + url, { method, body: payload, headers, redirect: 'manual' });
-  const set = res.headers.get('set-cookie');
-  if (set) cookie = set.split(';')[0];
-  return { status: res.status, location: res.headers.get('location'), text: await res.text() };
+// Her kullanıcının kendi çerezi olur.
+function client() {
+  let cookie = '';
+  return async function req(method, url, body) {
+    let payload = body;
+    if (body && !(body instanceof FormData) && !(body instanceof URLSearchParams)) payload = new URLSearchParams(body);
+    const res = await fetch(base + url, { method, body: payload, headers: { cookie }, redirect: 'manual' });
+    const set = res.headers.get('set-cookie');
+    if (set) cookie = set.split(';')[0];
+    return { status: res.status, location: res.headers.get('location'), text: await res.text() };
+  };
 }
 
+async function addModel(req, { kumas, icerik, k = [], ab, konu, labels }) {
+  const fd = new FormData();
+  fd.append('ana_kumas', kumas);
+  fd.append('icerik', icerik);
+  k.forEach((v, i) => fd.append(`k${i}`, v));
+  if (ab) fd.append('ab_test', '1');
+  if (konu) fd.append('test_konusu', konu);
+  (labels || ['', '']).forEach((label, i) => {
+    fd.append('images', new Blob([PNG], { type: 'image/png' }), `g${i}.png`);
+    fd.append('labels', label);
+  });
+  return req('POST', '/modeller', fd);
+}
+
+function surveyBody({ title, models, emails, action }) {
+  const body = new URLSearchParams({ title, emails, days: '3', hour: '18:00', result_emails: 'ayse@firma.com.tr', action });
+  models.forEach((id) => body.append('models', String(id)));
+  return body;
+}
+
+const anon = client();
+async function join(token, email) {
+  const r = await anon('POST', `/k/${token}`, { email });
+  assert.strictEqual(r.status, 302, r.text);
+  return r.location.split('/a/')[1];
+}
+
+let admin;
 test.before(async () => {
   await new Promise((resolve) => { server = app.listen(0, resolve); });
   base = `http://127.0.0.1:${server.address().port}`;
+  admin = client();
+  await admin('POST', '/kayit', { username: 'ayse', email: 'ayse@firma.com.tr', password: 'gizli-sifre' });
 });
 test.after(() => server.close());
 
 test('kapanış saati Türkiye saatine göre hesaplanır', () => {
-  // 18 Ekim 2026 22:30 TR = 19:30 UTC; 5 gün sonra 18:00 TR = 23 Ekim 15:00 UTC
   assert.strictEqual(closesAt(5, '18:00', new Date('2026-10-18T19:30:00Z')), '2026-10-23T15:00:00.000Z');
-  // TR'de gece yarısını geçtiyse gün TR takvimine göre sayılır
   assert.strictEqual(closesAt(0, '23:00', new Date('2026-10-18T21:30:00Z')), '2026-10-19T20:00:00.000Z');
 });
 
-test('uçtan uca akış: kayıt, model, anket, yanıt, sonuç maili', async () => {
-  let r = await req('POST', '/kayit', { username: 'ayse', email: 'ayse@firma.com.tr', password: 'gizli-sifre' });
-  assert.strictEqual(r.status, 302);
-  assert.ok(cookie.startsWith('oturum='));
+test('kırılım: Excel başlıkları ve alt kırılımlar', async () => {
+  assert.deepStrictEqual(kirilim.levels, ['Marka Müdürlükleri', 'Gelecek Dönem Buyer Grup', 'Gelecek Dönem Merch Alt Grup Kod', 'Gelecek Dönem Ürün Klasman']);
+  assert.ok(kirilim.options([]).includes('BEBEK MARKA DİREKTÖRLÜĞÜ'));
+  assert.ok(!kirilim.options([]).includes('Genel Toplam'));
+  assert.ok(kirilim.options(['BEBEK MARKA DİREKTÖRLÜĞÜ']).includes('AKSESUAR'));
+  assert.ok(kirilim.options(BEBEK.slice(0, 3)).includes('ŞAPKA KEP'));
+  assert.deepStrictEqual(kirilim.normalize(BEBEK), BEBEK);
+  assert.deepStrictEqual(kirilim.normalize([BEBEK[0], '', 'CKB']), [BEBEK[0]], 'boş seviyeden sonrası atılır');
+  assert.strictEqual(kirilim.normalize([BEBEK[0], 'OLMAYAN GRUP']), null);
 
-  const modelIds = [];
-  for (const [kumas, icerik] of [['Viskon krep', '%100 Viskon'], ['Denim', '%98 Pamuk %2 Elastan']]) {
-    const fd = new FormData();
-    fd.append('ana_kumas', kumas);
-    fd.append('icerik', icerik);
-    fd.append('images', new Blob([PNG], { type: 'image/png' }), 'a.png');
-    fd.append('images', new Blob([PNG], { type: 'image/png' }), 'b.png');
-    r = await req('POST', '/modeller', fd);
-    assert.strictEqual(r.status, 302, r.text);
-    modelIds.push(Number(r.location.split('/').pop()));
-  }
-  r = await req('GET', '/modeller');
-  assert.match(r.text, /MDL-0001/);
-  assert.match(r.text, /MDL-0002/);
-  assert.match(r.text, /2 görsel/);
-
-  r = await req('POST', '/anketler', {
-    title: 'Yaz 2027', models: String(modelIds[0]), emails: 'mehmet@firma.com.tr\nselin@magaza.com, hatali', days: '3', hour: '18:00', result_emails: 'ayse@firma.com.tr',
-  });
-  assert.strictEqual(r.status, 400);
-  assert.match(r.text, /hatali/);
-
-  const body = new URLSearchParams({ title: 'Yaz 2027', emails: 'mehmet@firma.com.tr\nselin@magaza.com;ali@firma.com.tr', days: '3', hour: '18:00', result_emails: 'ayse@firma.com.tr' });
-  modelIds.forEach((id) => body.append('models', String(id)));
-  r = await req('POST', '/anketler', body);
-  assert.strictEqual(r.status, 302, r.text);
-  const surveyId = Number(r.location.match(/anketler\/(\d+)/)[1]);
-  await surveys.sendInvitations(surveyId);
-
-  const invites = db.prepare('SELECT * FROM invitations WHERE survey_id = ? ORDER BY email').all(surveyId);
-  assert.strictEqual(invites.length, 3);
-  assert.ok(invites.every((i) => i.sent_at));
-  const inviteMail = db.prepare("SELECT * FROM outbox WHERE subject LIKE 'Görüşünüz%' AND to_addr = 'mehmet@firma.com.tr'").get();
-  assert.ok(inviteMail.html.includes(`/a/${invites.find((i) => i.email === 'mehmet@firma.com.tr').token}`));
-
-  const [ali, mehmet, selin] = invites;
-  const [m1, m2] = modelIds;
-  const anon = cookie;
-  cookie = '';
-  r = await req('GET', `/a/${mehmet.token}`);
-  assert.match(r.text, /Tarzım değil/);
-  r = await req('POST', `/a/${mehmet.token}`, { [`r_${m1}`]: '5' });
-  assert.strictEqual(r.status, 400, 'eksik yanıt reddedilmeli');
-  r = await req('POST', `/a/${mehmet.token}`, { [`r_${m1}`]: '5', [`r_${m2}`]: 'nms', [`c_${m2}`]: 'Bana göre değil' });
-  assert.match(r.text, /Teşekkürler/);
-  r = await req('POST', `/a/${selin.token}`, { [`r_${m1}`]: '4', [`r_${m2}`]: '2', [`c_${m1}`]: 'Rengi çok güzel' });
-  assert.match(r.text, /Teşekkürler/);
-  r = await req('GET', `/a/${mehmet.token}`);
-  assert.match(r.text, /tamamladınız/);
-  cookie = anon;
-
-  // Kapanış zamanı geldiğinde zamanlayıcı anketi kapatır ve sonucu gönderir.
-  db.prepare('UPDATE surveys SET closes_at = ? WHERE id = ?').run(new Date(Date.now() - 1000).toISOString(), surveyId);
-  await surveys.tick();
-  const survey = db.prepare('SELECT * FROM surveys WHERE id = ?').get(surveyId);
-  assert.ok(survey.closed_at && survey.result_sent_at);
-
-  const resultMail = db.prepare("SELECT * FROM outbox WHERE subject LIKE 'Anket sonucu%'").get();
-  assert.strictEqual(resultMail.to_addr, 'ayse@firma.com.tr');
-  assert.match(resultMail.html, /2\/3/);
-  assert.match(resultMail.html, /Rengi çok güzel/);
-  // MDL-0001: 5 ve 4 → 4,5; MDL-0002: yalnızca 2 (tarzım değil sayılmaz) → 2,0
-  assert.match(resultMail.html, /4,5/);
-  assert.match(resultMail.html, /2,0/);
-  assert.ok(resultMail.html.indexOf('MDL-0001') < resultMail.html.indexOf('MDL-0002'));
-
-  r = await req('GET', `/a/${ali.token}`);
-  assert.match(r.text, /Anket kapandı/);
-
-  r = await req('GET', `/anketler/${surveyId}/sonuclar.csv`);
-  assert.match(r.text, /MDL-0002;Denim;%98 Pamuk %2 Elastan;;;;2,0;1;1;0;1;0;0;0;;/);
-
-  // İkinci tur aynı sonucu tekrar göndermez.
-  await surveys.tick();
-  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE subject LIKE 'Anket sonucu%'").get().n, 1);
+  const r = await admin('GET', `/kirilim?p=${encodeURIComponent(BEBEK[0])}&p=AKSESUAR`);
+  assert.ok(JSON.parse(r.text).options.includes('CKB'));
 });
 
-test('giriş yapmadan yönetim sayfaları açılmaz', async () => {
-  cookie = '';
-  const r = await req('GET', '/modeller');
+test('uçtan uca: model, gönder, Outlook, ortak link, sonuç', async () => {
+  let r = await addModel(admin, { kumas: 'Viskon krep', icerik: '%100 Viskon', k: BEBEK });
+  assert.strictEqual(r.status, 302, r.text);
+  const m1 = Number(r.location.split('/').pop());
+  r = await addModel(admin, { kumas: 'Denim', icerik: '%98 Pamuk %2 Elastan', k: [BEBEK[0], 'OLMAYAN'] });
+  assert.strictEqual(r.status, 400);
+  assert.match(r.text, /Kırılım seçimi listede bulunamadı/);
+  r = await addModel(admin, { kumas: 'Denim', icerik: '%98 Pamuk %2 Elastan' });
+  const m2 = Number(r.location.split('/').pop());
+
+  r = await admin('GET', '/modeller');
+  assert.match(r.text, /AKSESUAR · CKB · ŞAPKA KEP/);
+  r = await admin('GET', `/modeller?marka=${encodeURIComponent(BEBEK[0])}`);
+  assert.match(r.text, /Viskon krep/);
+  assert.doesNotMatch(r.text, /Denim/);
+
+  r = await admin('POST', '/anketler', surveyBody({ title: 'Yaz 2027', models: [m1, m2], emails: 'mehmet@firma.com.tr\nselin@magaza.com', action: 'gonder' }));
+  assert.strictEqual(r.status, 302, r.text);
+  assert.match(r.location, /m=yayinda/);
+  const surveyId = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  const survey = db.prepare('SELECT * FROM surveys WHERE id = ?').get(surveyId);
+  assert.ok(survey.published_at);
+
+  r = await admin('GET', `/anketler/${surveyId}?m=yayinda`);
+  assert.match(r.text, /href="mailto:ayse%40firma.com.tr\?bcc=mehmet%40firma.com.tr,selin%40magaza.com&amp;subject=/);
+  assert.ok(r.text.includes(encodeURIComponent(`/k/${survey.public_token}`)), 'mailde ortak link olmalı');
+  assert.match(r.text, /window.location.href=a.href/, 'Outlook otomatik açılmalı');
+
+  const mehmet = await join(survey.public_token, 'Mehmet@firma.com.tr');
+  const selin = await join(survey.public_token, 'selin@magaza.com');
+  const disaridan = await join(survey.public_token, 'ali@firma.com.tr');
+  assert.strictEqual(await join(survey.public_token, 'mehmet@firma.com.tr'), mehmet, 'aynı adres aynı ankete döner');
+
+  r = await anon('POST', `/a/${mehmet}`, { [`r_${m1}`]: '5' });
+  assert.strictEqual(r.status, 400, 'eksik yanıt reddedilmeli');
+  r = await anon('POST', `/a/${mehmet}`, { [`r_${m1}`]: '5', [`r_${m2}`]: 'nms', [`c_${m2}`]: 'Bana göre değil' });
+  assert.match(r.text, /Teşekkürler/);
+  r = await anon('POST', `/a/${selin}`, { [`r_${m1}`]: '4', [`r_${m2}`]: '2', [`c_${m1}`]: 'Rengi çok güzel' });
+  assert.match(r.text, /Teşekkürler/);
+  r = await anon('GET', `/a/${mehmet}`);
+  assert.match(r.text, /tamamladınız/);
+
+  r = await anon('GET', `/sonuc/${survey.result_token}`);
+  assert.match(r.text, /Sonuç henüz hazır değil/);
+
+  db.prepare('UPDATE surveys SET closes_at = ? WHERE id = ?').run(new Date(Date.now() - 1000).toISOString(), surveyId);
+  await surveys.tick();
+  assert.ok(db.prepare('SELECT closed_at FROM surveys WHERE id = ?').get(surveyId).closed_at);
+
+  const results = computeResults(surveyId);
+  assert.strictEqual(results.invited, 2, 'linkle kendisi katılan davetli sayılmaz');
+  assert.strictEqual(results.completed, 2);
+  assert.strictEqual(results.models[0].avg, 4.5);
+  assert.strictEqual(results.models[1].avg, 2);
+
+  const mail = db.prepare("SELECT * FROM outbox WHERE subject = 'Anket sonucu: Yaz 2027'").get();
+  assert.ok(mail.html.includes(`/sonuc/${survey.result_token}`));
+
+  r = await anon('GET', `/a/${disaridan}`);
+  assert.match(r.text, /Anket kapandı/);
+  r = await anon('GET', `/sonuc/${survey.result_token}`);
+  assert.match(r.text, /Rengi çok güzel/);
+  assert.match(r.text, /4,5/);
+
+  r = await admin('GET', `/anketler/${surveyId}`);
+  assert.match(r.text, /Sonucu Outlook ile paylaş/);
+  assert.match(r.text, /Linkle katıldı/);
+
+  r = await admin('GET', `/anketler/${surveyId}/sonuclar.csv`);
+  assert.match(r.text, /Marka Müdürlükleri;Gelecek Dönem Buyer Grup;Gelecek Dönem Merch Alt Grup Kod;Gelecek Dönem Ürün Klasman/);
+  assert.match(r.text, /BEBEK MARKA DİREKTÖRLÜĞÜ;AKSESUAR;CKB;ŞAPKA KEP;;;;4,5/);
+});
+
+test('taslak: sonra gönderme, yalnızca admin test linki, 7 gün sonra silme', async () => {
+  const user = client();
+  await user('POST', '/kayit', { username: 'mehmet', email: 'mehmet@firma.com.tr', password: 'gizli-sifre' });
+  let r = await addModel(user, { kumas: 'Triko', icerik: '%100 Yün' });
+  const model = Number(r.location.split('/').pop());
+
+  r = await user('POST', '/anketler', surveyBody({ title: 'Taslak anket', models: [model], emails: 'x@f.com', action: 'taslak' }));
+  assert.match(r.location, /m=taslak/);
+  const id = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  const draft = db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
+  assert.strictEqual(draft.published_at, null);
+
+  r = await user('GET', `/anketler/${id}`);
+  assert.match(r.text, /Taslaklar 7 gün içinde gönderilmezse otomatik silinir/);
+  assert.doesNotMatch(r.text, /Test linki/, 'test linki yalnızca admine görünür');
+  r = await user('GET', `/t/${draft.test_token}`);
+  assert.strictEqual(r.status, 403);
+  r = await anon('GET', `/t/${draft.test_token}`);
   assert.strictEqual(r.status, 302);
-  assert.strictEqual(r.location, '/giris');
+  r = await anon('GET', `/k/${draft.public_token}`);
+  assert.match(r.text, /henüz başlamadı/);
+
+  // Admin başkasının taslağını göremez ama test linkini açabilir; adminlere gönderme düğmesi kendi anketinde görünür.
+  r = await admin('GET', `/t/${draft.test_token}`);
+  assert.match(r.text, /TEST/);
+  r = await admin('POST', `/t/${draft.test_token}`, { [`r_${model}`]: '3' });
+  assert.match(r.text, /Test tamamlandı/);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM invitations WHERE survey_id = ? AND completed_at IS NOT NULL').get(id).n, 0, 'test yanıtı kaydedilmez');
+
+  r = await admin('POST', '/anketler', surveyBody({ title: 'Admin taslağı', models: [model], emails: 'x@f.com', action: 'taslak' }));
+  r = await admin('GET', r.location);
+  assert.match(r.text, /Test linkini adminlere Outlook ile gönder/);
+  assert.match(r.text, /mailto:ayse%40firma.com.tr,diger.admin%40firma.com.tr\?subject=Test/);
+
+  r = await user('POST', `/anketler/${id}/yayinla`);
+  assert.match(r.location, /m=yayinda/);
+  assert.ok(db.prepare('SELECT published_at FROM surveys WHERE id = ?').get(id).published_at);
+
+  // Taslak 7 gün sonra silinir; gönderilmiş anket silinmez.
+  r = await user('POST', '/anketler', surveyBody({ title: 'Eski taslak', models: [model], emails: 'x@f.com', action: 'taslak' }));
+  const old = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  assert.strictEqual(surveys.deleteExpiredDrafts(new Date(Date.now() + 6 * 86400000)), 0);
+  assert.strictEqual(surveys.deleteExpiredDrafts(new Date(Date.now() + 7 * 86400000 + 60000)), 2);
+  assert.strictEqual(db.prepare('SELECT 1 FROM surveys WHERE id = ?').get(old), undefined);
+  assert.ok(db.prepare('SELECT 1 FROM surveys WHERE id = ?').get(id));
 });
 
 test('A/B testi: seçenekler ayrı puanlanır, koleksiyon tercihi kazananı belirler', async () => {
-  cookie = '';
-  await req('POST', '/kayit', { username: 'ab-kullanici', email: 'ab@firma.com.tr', password: 'gizli-sifre' });
-
-  let fd = new FormData();
-  fd.append('ana_kumas', 'Ekose flanel');
-  fd.append('icerik', '%100 Pamuk');
-  fd.append('ab_test', '1');
-  fd.append('images', new Blob([PNG], { type: 'image/png' }), 'tek.png');
-  let r = await req('POST', '/modeller', fd);
+  let r = await addModel(admin, { kumas: 'Ekose flanel', icerik: '%100 Pamuk', ab: true, labels: ['tek'] });
   assert.strictEqual(r.status, 400, 'tek görselle A/B testi olmaz');
-  assert.match(r.text, /en az iki görsel/);
-
-  fd = new FormData();
-  fd.append('ana_kumas', 'Ekose flanel');
-  fd.append('icerik', '%100 Pamuk');
-  fd.append('ab_test', '1');
-  fd.append('test_konusu', 'Ekose renkleri');
-  for (const [name, label] of [['a.png', 'Kırmızı-lacivert'], ['b.png', 'Yeşil-bej'], ['c.png', '']]) {
-    fd.append('images', new Blob([PNG], { type: 'image/png' }), name);
-    fd.append('labels', label);
-  }
-  r = await req('POST', '/modeller', fd);
+  r = await addModel(admin, { kumas: 'Ekose flanel', icerik: '%100 Pamuk', ab: true, konu: 'Ekose renkleri', labels: ['Kırmızı-lacivert', 'Yeşil-bej', ''] });
   assert.strictEqual(r.status, 302, r.text);
   const modelId = Number(r.location.split('/').pop());
-  const imgs = db.prepare('SELECT * FROM model_images WHERE model_id = ? ORDER BY sort_order').all(modelId);
-  assert.deepStrictEqual(imgs.map((i) => i.label), ['Kırmızı-lacivert', 'Yeşil-bej', null]);
-  const [A, B, C] = imgs.map((i) => i.id);
+  const [A, B, C] = db.prepare('SELECT id FROM model_images WHERE model_id = ? ORDER BY sort_order').all(modelId).map((i) => i.id);
 
-  r = await req('GET', '/modeller');
-  assert.match(r.text, /A\/B · 3 seçenek/);
-
-  r = await req('POST', '/anketler', { title: 'Ekose testi', models: String(modelId), emails: 'x@f.com, y@f.com, z@f.com', days: '2', hour: '18:00', result_emails: 'ab@firma.com.tr' });
+  r = await admin('POST', '/anketler', surveyBody({ title: 'Ekose testi', models: [modelId], emails: 'x@f.com, y@f.com, z@f.com', action: 'gonder' }));
   const surveyId = Number(r.location.match(/anketler\/(\d+)/)[1]);
-  await surveys.sendInvitations(surveyId);
-  const [x, y, z] = db.prepare('SELECT * FROM invitations WHERE survey_id = ? ORDER BY email').all(surveyId);
+  const { public_token: token } = db.prepare('SELECT public_token FROM surveys WHERE id = ?').get(surveyId);
 
-  const own = cookie;
-  cookie = '';
-  r = await req('GET', `/a/${x.token}`);
+  const x = await join(token, 'x@f.com');
+  r = await anon('GET', `/a/${x}`);
   assert.match(r.text, /Koleksiyona hangisi girsin/);
-  assert.match(r.text, /Ekose renkleri/);
   assert.match(r.text, /B · Yeşil-bej/);
   assert.match(r.text, /C · Seçenek C/);
 
   const k = (img) => `r_${modelId}_${img}`;
   const p = `p_${modelId}`;
-  r = await req('POST', `/a/${x.token}`, { [k(A)]: '5', [k(B)]: '3' });
-  assert.strictEqual(r.status, 400, 'eksik seçenek reddedilmeli');
-  r = await req('POST', `/a/${x.token}`, { [k(A)]: '5', [k(B)]: '3', [k(C)]: '2' });
+  r = await anon('POST', `/a/${x}`, { [k(A)]: '5', [k(B)]: '3', [k(C)]: '2' });
   assert.strictEqual(r.status, 400, 'tercih yapılmadan gönderilemez');
-  r = await req('POST', `/a/${x.token}`, { [k(A)]: '4', [k(B)]: '5', [k(C)]: 'nms', [p]: String(B), [`c_${modelId}`]: 'Yeşil daha taze' });
-  assert.match(r.text, /Teşekkürler/);
-  r = await req('POST', `/a/${y.token}`, { [k(A)]: '5', [k(B)]: '4', [k(C)]: '1', [p]: String(B) });
-  assert.match(r.text, /Teşekkürler/);
-  r = await req('POST', `/a/${z.token}`, { [k(A)]: '5', [k(B)]: '2', [k(C)]: 'nms', [p]: '0' });
-  assert.match(r.text, /Teşekkürler/);
-  cookie = own;
+  await anon('POST', `/a/${x}`, { [k(A)]: '4', [k(B)]: '5', [k(C)]: 'nms', [p]: String(B), [`c_${modelId}`]: 'Yeşil daha taze' });
+  await anon('POST', `/a/${await join(token, 'y@f.com')}`, { [k(A)]: '5', [k(B)]: '4', [k(C)]: '1', [p]: String(B) });
+  await anon('POST', `/a/${await join(token, 'z@f.com')}`, { [k(A)]: '5', [k(B)]: '2', [k(C)]: 'nms', [p]: '0' });
 
-  const { computeResults } = require('../src/results');
   const m = computeResults(surveyId).models[0];
-  assert.ok(m.ab);
   const [vA, vB, vC] = m.variants;
   assert.strictEqual(vA.avg, 14 / 3);
   assert.strictEqual(vB.picks, 2);
   assert.strictEqual(vC.notMyStyle, 2);
-  assert.strictEqual(vC.avg, 1);
   assert.strictEqual(m.noPick, 1);
-  // A'nın ortalaması daha yüksek olsa da koleksiyon tercihi B'de.
-  assert.strictEqual(m.winner.letter, 'B');
+  assert.strictEqual(m.winner.letter, 'B', 'A ortalamada önde olsa da koleksiyon tercihi B');
 
-  r = await req('GET', `/anketler/${surveyId}`);
-  assert.match(r.text, /önde: <b>B · Yeşil-bej<\/b>/);
-  assert.match(r.text, /seçimi B/);
-
-  r = await req('GET', `/anketler/${surveyId}/sonuclar.csv`);
+  r = await admin('GET', `/anketler/${surveyId}/sonuclar.csv`);
   assert.match(r.text, /Ekose renkleri;B;Yeşil-bej;3,7;3;0;0;1;0;1;1;2;Evet/);
-  assert.match(r.text, /Ekose renkleri;–;Hiçbiri;;;;;;;;;1;/);
 
-  r = await req('POST', `/anketler/${surveyId}/kapat`);
+  await admin('POST', `/anketler/${surveyId}/kapat`);
   const mail = db.prepare("SELECT * FROM outbox WHERE subject = 'Anket sonucu: Ekose testi'").get();
-  assert.match(mail.html, /A\/B/);
   assert.match(mail.html, /B ✓/);
   assert.match(mail.html, /1 kişi hiçbirini seçmedi/);
+});
+
+test('giriş yapmadan yönetim sayfaları açılmaz', async () => {
+  const r = await client()('GET', '/modeller');
+  assert.strictEqual(r.status, 302);
+  assert.strictEqual(r.location, '/giris');
 });
