@@ -409,7 +409,6 @@ app.post('/anketler', auth.requireUser, async (req, res) => {
   const existing = values.modelIds.filter((id) => getModel(id));
   if (!values.title) errs.push('Anket adını yazın.');
   if (!existing.length) errs.push('En az bir model seçin.');
-  if (!emails.valid.length) errs.push('En az bir geçerli e-posta adresi girin.');
   if (emails.invalid.length) errs.push(`Şu adresler geçersiz: ${emails.invalid.join(', ')}`);
   if (!resultEmails.valid.length || resultEmails.invalid.length) errs.push('Sonucun gönderileceği adresi kontrol edin.');
   if (!Number.isInteger(values.days) || values.days < 0 || values.days > 60) errs.push('Süre 0 ile 60 gün arasında olmalı.');

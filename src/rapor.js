@@ -50,9 +50,9 @@ function resultEmail(results) {
     <div style="font-size:12px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:.08em">Anket tamamlandı</div>
     <div style="font-size:22px;font-weight:800;margin:4px 0 14px">${survey.title}</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td style="background:${C.soft};border-radius:14px;padding:12px;text-align:center" width="33%"><div style="font-size:22px;font-weight:800">${completed}/${invited}</div><div style="font-size:11px;color:${C.muted}">yanıtlayan</div></td>
+      <td style="background:${C.soft};border-radius:14px;padding:12px;text-align:center" width="33%"><div style="font-size:22px;font-weight:800">${invited ? `${completed}/${invited}` : completed}</div><div style="font-size:11px;color:${C.muted}">yanıtlayan</div></td>
       <td width="8"></td>
-      <td style="background:${C.soft};border-radius:14px;padding:12px;text-align:center" width="33%"><div style="font-size:22px;font-weight:800">%${rate}</div><div style="font-size:11px;color:${C.muted}">katılım</div></td>
+      <td style="background:${C.soft};border-radius:14px;padding:12px;text-align:center" width="33%"><div style="font-size:22px;font-weight:800">${invited ? `%${rate}` : '–'}</div><div style="font-size:11px;color:${C.muted}">katılım</div></td>
       <td width="8"></td>
       <td style="background:${C.soft};border-radius:14px;padding:12px;text-align:center" width="33%"><div style="font-size:22px;font-weight:800">${models.length}</div><div style="font-size:11px;color:${C.muted}">model</div></td>
     </tr></table>

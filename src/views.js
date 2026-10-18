@@ -315,7 +315,7 @@ function surveysPage({ user, surveys, flash }) {
     <div class="list">
       ${surveys.map((s) => html`<div class="row card survey-row">
         <a class="row-link" href="/anketler/${s.id}">
-          <div class="row-main"><b>${s.title}${s.lang === 'en' ? html` <span class="lang-pill">EN</span>` : ''}</b><span class="sub">${s.model_count} model · ${s.completed}/${s.invited} yanıt · ${s.published_at ? `kapanış ${formatTR(s.closes_at)}` : `gönderilince ${s.open_days} gün açık kalır`}</span>
+          <div class="row-main"><b>${s.title}${s.lang === 'en' ? html` <span class="lang-pill">EN</span>` : ''}</b><span class="sub">${s.model_count} model · ${s.invited ? `${s.completed}/${s.invited}` : s.completed} yanıt · ${s.published_at ? `kapanış ${formatTR(s.closes_at)}` : `gönderilince ${s.open_days} gün açık kalır`}</span>
             ${s.published_at ? '' : html`<small class="warn-note">${formatTR(draftExpiresAt(s))} tarihinde silinecek</small>`}</div>
           ${status(s)}</a>
         ${deleteSurveyForm(s, true)}
@@ -349,9 +349,9 @@ function newSurveyPage({ user, models, values = {}, errs }) {
     : html`<p class="empty">Önce <a href="/modeller/yeni">model ekleyin</a>.</p>`}
       </div>
       <div class="card stack">
-        <label class="field"><span>Kime gönderilsin?</span>
-          <textarea id="emails" name="emails" rows="4" required placeholder="mehmet.yilmaz&#10;selin.kaya&#10;dis.tedarikci@ornek.com">${values.emails || ''}</textarea>
-          <small>Kullanıcı adı (ad.soyad) ya da tam adres yazın; her satıra bir kişi ya da virgülle ayırın. Outlook'tan kopyaladığınız "Ad Soyad &lt;adres&gt;" listesi de olur. Gönderirken Outlook'ta gizli alıcı (BCC) olarak eklenir.</small></label>
+        <label class="field"><span>Kime gönderilsin? <em>isteğe bağlı</em></span>
+          <textarea id="emails" name="emails" rows="4" placeholder="mehmet.yilmaz&#10;selin.kaya&#10;dis.tedarikci@ornek.com">${values.emails || ''}</textarea>
+          <small>Kullanıcı adı (ad.soyad) ya da tam adres yazın; her satıra bir kişi ya da virgülle ayırın. Outlook'tan kopyaladığınız "Ad Soyad &lt;adres&gt;" listesi de olur. Gönderirken Outlook'ta gizli alıcı (BCC) olarak eklenir. Boş bırakırsanız alıcıları Outlook'ta kendiniz eklersiniz ya da anket linkini paylaşırsınız.</small></label>
       </div>
       <div class="card stack">
         <div class="two">
@@ -431,6 +431,8 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
   const { survey, invited, completed, models } = results;
   const state = surveyState(survey);
   const rate = invited ? Math.min(100, Math.round((completed / invited) * 100)) : 0;
+  // Alıcı listesi boş bırakıldıysa (link paylaşıldıysa) oran yerine yalnızca yanıt sayısı gösterilir.
+  const recipients = (n) => (n ? `${n} alıcı` : 'alıcısız (alıcıları Outlook’ta eklersiniz)');
   const subline = {
     taslak: `Taslak · gönderilince ${survey.open_days} gün açık kalır, ${survey.open_hour}'de kapanır`,
     acik: `Canlıda · ${formatTR(survey.closes_at)} tarihinde kapanır`,
@@ -443,8 +445,8 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
       <div class="stepline"><span class="num">1</span><div><b>Test edin <span class="pill">Admin</span></b><p class="sub">Anketi katılımcının göreceği şekilde deneyin. Test yanıtları kaydedilmez.</p></div></div>
       ${copyField('testlink', 'Test linki', links.test, 'Testi aç')}
       ${testMailto ? html`<a class="btn btn-sm btn-soft" href="${testMailto}">Test linkini adminlere Outlook ile gönder</a>` : ''}
-      <div class="stepline"><span class="num">2</span><div><b>Gönderin</b><p class="sub">Kapanış zamanı gönderdiğiniz andan itibaren hesaplanır. Outlook, ${invitedEmails.length} alıcı ve anket linkiyle hazır bir mail açar.</p></div></div>`
-    : html`<div><b>Göndermeye hazır olduğunuzda</b><p class="sub">Kapanış zamanı gönderdiğiniz andan itibaren hesaplanır. Outlook, ${invitedEmails.length} alıcı ve anket linkiyle hazır bir mail açar.</p></div>`}
+      <div class="stepline"><span class="num">2</span><div><b>Gönderin</b><p class="sub">Kapanış zamanı gönderdiğiniz andan itibaren hesaplanır. Outlook, ${recipients(invitedEmails.length)} ve anket linkiyle hazır bir mail açar.</p></div></div>`
+    : html`<div><b>Göndermeye hazır olduğunuzda</b><p class="sub">Kapanış zamanı gönderdiğiniz andan itibaren hesaplanır. Outlook, ${recipients(invitedEmails.length)} ve anket linkiyle hazır bir mail açar.</p></div>`}
       <form method="post" action="/anketler/${survey.id}/yayinla"><button class="btn outlook">Gönder ve Outlook'ta aç</button></form>
       <p class="warn-note">${draftNote(survey)}</p>
     </div>`;
@@ -500,7 +502,8 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
       ${copyField('sonuclink', 'Sonuç sayfası (giriş gerektirmez)', links.result, 'Aç')}
     </div>` : ''}
     ${state !== 'taslak' ? html`<div class="stats">
-      <div class="card stat"><div class="ring" style="--p:${rate}"><b>%${rate}</b></div><div><b>${completed} / ${invited}</b><div class="sub">davetli yanıtladı</div></div></div>
+      ${invited ? html`<div class="card stat"><div class="ring" style="--p:${rate}"><b>%${rate}</b></div><div><b>${completed} / ${invited}</b><div class="sub">davetli yanıtladı</div></div></div>`
+    : html`<div class="card stat"><div class="ring" style="--p:100"><b>${completed}</b></div><div><b>${completed} kişi</b><div class="sub">yanıtladı</div></div></div>`}
       <div class="card stat-actions">
         ${state === 'acik' ? html`<form method="post" action="/anketler/${survey.id}/kapat"><button class="btn btn-sm">Şimdi kapat</button></form>` : ''}
         <a class="btn btn-sm btn-soft" href="/anketler/${survey.id}/sonuc.pdf">Sonuçları indir (PDF)</a>
@@ -615,7 +618,7 @@ function publicResultPage({ results }) {
     title: `Sonuç: ${survey.title}`, nav: false,
     body: html`
     <div class="head"><div><div class="sub">Anket sonucu</div><h1>${survey.title}</h1>
-      <p class="sub">Kapandı · ${formatTR(survey.closed_at || survey.closes_at)} · ${completed} yanıt (${invited} davetli)</p></div></div>
+      <p class="sub">Kapandı · ${formatTR(survey.closed_at || survey.closes_at)} · ${completed} yanıt${invited ? ` (${invited} davetli)` : ''}</p></div></div>
     <a class="btn btn-sm btn-soft" href="/sonuc/${survey.result_token}/rapor.pdf">Sonuçları indir (PDF)</a>
     <p class="sub">Ortalama yalnızca 1–5 puanlardan hesaplanır. “Tarzım değil” yanıtları ortalamaya katılmaz.</p>
     ${resultsList(models)}`,

@@ -72,7 +72,7 @@ function resultMailto({ results, to }) {
   });
   const body = [
     `${survey.title} anketi sonuçlandı.`,
-    `${completed} kişi yanıtladı (${invited} davetli).`,
+    `${completed} kişi yanıtladı${invited ? ` (${invited} davetli)` : ''}.`,
     '',
     ...lines,
     models.length > 15 ? `… ve ${models.length - 15} model daha` : '',

@@ -60,7 +60,7 @@ function resultDraft({ results, ownerName, png, pdf, csv }) {
   const cid = `rapor-${survey.id}@model-begeni-anketi`;
   const html = `<!doctype html><html><body style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#22385A">
 <p>Merhaba,</p>
-<p><b>${esc(survey.title)}</b> anketi sonuçlandı. ${completed} kişi yanıtladı (${invited} davetli). Sonuçların özeti aşağıda; raporun tamamı ve yorumlar ekteki PDF'te, ayrıntılı puanlar Excel dosyalarında.</p>
+<p><b>${esc(survey.title)}</b> anketi sonuçlandı. ${completed} kişi yanıtladı${invited ? ` (${invited} davetli)` : ''}. Sonuçların özeti aşağıda; raporun tamamı ve yorumlar ekteki PDF'te, ayrıntılı puanlar Excel dosyalarında.</p>
 <p><img src="cid:${cid}" alt="Anket sonucu" width="760" style="max-width:100%;border-radius:12px"></p>
 <p>Görselli sonuç sayfası: <a href="${link}">${link}</a></p>
 <p>${esc(ownerName)}</p>

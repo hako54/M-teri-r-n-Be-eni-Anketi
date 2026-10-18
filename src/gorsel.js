@@ -112,7 +112,9 @@ function buildReportSvg(results, { from = 0, to = results.models.length, header 
     out.push(text(40, 78, 'ANKET SONUCU', { size: 13, weight: 800, fill: C.muted }));
     out.push(text(40, 116, trunc(survey.title, 48), { size: 34, weight: 800 }));
     out.push(text(40, 144, `Kapanış: ${formatTR(survey.closed_at || survey.closes_at)}`, { size: 15, fill: C.muted }));
-    const tiles = [[`${completed}/${invited}`, 'yanıtlayan'], [`%${rate}`, 'katılım'], [String(models.length), 'model']];
+    const tiles = invited
+      ? [[`${completed}/${invited}`, 'yanıtlayan'], [`%${rate}`, 'katılım'], [String(models.length), 'model']]
+      : [[String(completed), 'yanıtlayan'], [String(models.length), 'model'], [formatTR(survey.closed_at || survey.closes_at, false), 'kapanış']];
     tiles.forEach(([big, small], k) => {
       const x = 40 + k * 312;
       out.push(`<rect x="${x}" y="166" width="296" height="82" rx="16" fill="${C.card}"/>`);

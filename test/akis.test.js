@@ -603,3 +603,27 @@ test('İngilizce anket: dil seçimi, otomatik çeviri, düzeltme, İngilizce kat
   r = await admin('POST', `/anketler/${id2}/yayinla`);
   assert.match(r.location, /m=yayinda/, 'DeepL dönünce eksikler çevrilip yayınlanır');
 });
+
+test('alıcı listesi isteğe bağlı: boş bırakılınca Outlook alıcısız açılır, link ile katılınır', async () => {
+  const fd = new FormData();
+  fd.append('ana_kumas', 'Alıcısız deneme'); fd.append('icerik', '%100 Pamuk');
+  fd.append('images', new Blob([PNG], { type: 'image/png' }), 'a.png');
+  const modelId = modelIdFrom(await admin('POST', '/modeller', fd));
+  let r = await admin('GET', '/anketler/yeni');
+  assert.doesNotMatch(r.text, /id="emails" name="emails" rows="4" required/);
+  r = await admin('POST', '/anketler', surveyBody({ title: 'Linkle paylaşılan', models: [modelId], emails: '', action: 'gonder' }));
+  assert.match(r.location, /m=yayinda/);
+  const id = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  r = await admin('GET', r.location);
+  assert.match(r.text, /href="mailto:ayse%40firma.com.tr\?subject=/, 'BCC olmadan, yalnızca sahibine');
+  assert.doesNotMatch(r.text, /bcc=/);
+  const { public_token: token } = db.prepare('SELECT public_token FROM surveys WHERE id = ?').get(id);
+  await anon('POST', `/a/${await join(token, 'linkten.gelen')}`, { [`r_${modelId}`]: '5' });
+  r = await admin('GET', `/anketler/${id}`);
+  assert.match(r.text, /1 kişi<\/b><div class="sub">yanıtladı/);
+  r = await admin('GET', '/anketler');
+  assert.match(r.text, /1 model · 1 yanıt/);
+  const results = computeResults(id);
+  assert.strictEqual(results.invited, 0);
+  assert.strictEqual(results.completed, 1);
+});
