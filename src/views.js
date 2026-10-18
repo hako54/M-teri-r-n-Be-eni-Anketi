@@ -248,7 +248,7 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, 
       <div class="preview" id="preview"></div>
       <fieldset class="abbox">
         <label class="switch"><input type="checkbox" id="ab_test" name="ab_test" value="1" ${v.ab_test ? 'checked' : ''}>
-          <span><b>A/B testi: görseller bu modelin alternatifleri</b><small>Renk, jakar deseni, çizgi yerleşimi, doku, ekose renkleri gibi seçenekleri karşılaştırın. Katılımcı her seçeneği ayrı puanlar ve koleksiyona hangisinin girmesini istediğini seçer. Kapalıysa görseller aynı ürünün farklı açıları sayılır.</small></span></label>
+          <span><b>A/B testi: görseller bu modelin alternatifleri</b><small>Renk, jakar deseni, çizgi yerleşimi, doku, ekose renkleri gibi seçenekleri karşılaştırın. Katılımcı her seçeneği ayrı puanlar ve koleksiyonda hangisinin olmasını istediğini seçer. Kapalıysa görseller aynı ürünün farklı açıları sayılır.</small></span></label>
         <label class="field ab-only"><span>Neyi karşılaştırıyorsunuz?</span>
           <select id="test_konusu" name="test_konusu"><option value="">Seçin</option>
             ${TEST_KONULARI.map((k) => html`<option ${v.test_konusu === k ? 'selected' : ''}>${k}</option>`)}</select></label>
@@ -481,12 +481,12 @@ function abStep(m) {
   return html`
     <div class="step-info"><b>${m.code}</b><span>${m.ana_kumas} · ${m.icerik}</span></div>
     <div class="ab-intro"><span class="ab inline">A/B</span> <b>${m.test_konusu || 'Seçenek karşılaştırması'}</b><br>
-      Bu modelin ${m.images.length} seçeneği var. Her birini puanlayın, sonra koleksiyona hangisinin girmesini istediğinizi seçin.</div>
+      Bu modelin ${m.images.length} seçeneği var. Her birini puanlayın, sonra koleksiyonda hangisinin olmasını istediğinizi seçin.</div>
     ${m.images.map((im) => html`<div class="variant-rate">
       <div class="tile-img"><img class="ph wide" src="/uploads/${im.filename}" alt="${m.code} ${im.letter}"><span class="no big">${im.letter}</span></div>
       ${rating(`r_${m.id}_${im.id}`, `${im.letter} · ${name(im)}`)}
     </div>`)}
-    <fieldset class="rate pickset"><legend>Koleksiyona hangisi girsin?</legend>
+    <fieldset class="rate pickset"><legend>Koleksiyonda hangisinin olmasını istersiniz?</legend>
       <div class="picks">${m.images.map((im) => html`<label><input type="radio" name="p_${m.id}" value="${im.id}" required>
         <span><img src="/uploads/${im.filename}" alt=""><b>${im.letter}</b><small>${im.label || ''}</small></span></label>`)}
         <label class="none"><input type="radio" name="p_${m.id}" value="0"><span><b>Hiçbiri</b></span></label></div>

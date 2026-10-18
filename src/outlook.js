@@ -22,7 +22,7 @@ function inviteText(survey, modelCount, ownerName) {
       'Merhaba,',
       '',
       `${survey.title} anketi için ${modelCount} model hakkında görüşünüzü rica ediyorum.`,
-      'Her modeli 1-5 arası puanlayabilir, size uygun değilse "Tarzım değil" seçebilirsiniz. A/B testli modellerde koleksiyona girmesini istediğiniz seçeneği de işaretleyin.',
+      'Her modeli 1-5 arası puanlayabilir, size uygun değilse "Tarzım değil" seçebilirsiniz. A/B testli modellerde koleksiyonda olmasını istediğiniz seçeneği de işaretleyin.',
       '',
       `Ankete katılmak için: ${link}`,
       '',

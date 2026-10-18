@@ -82,7 +82,7 @@ function computeResults(surveyId) {
       picks: pickCount(im.id),
       ...summarize(responsesFor.all(surveyId, m.id, im.id)),
     }));
-    // Kazanan: en çok "koleksiyona girsin" tercihi; eşitlikte yüksek ortalama.
+    // Kazanan: en çok "koleksiyonda olsun" tercihi; eşitlikte yüksek ortalama.
     const winner = [...variants].sort((a, b) => b.picks - a.picks || byAvg(a, b))[0];
     const hasVotes = variants.some((v) => v.picks || v.scored);
     const letterOf = (imageId) => (variants.find((v) => v.imageId === imageId) || {}).letter;

@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS backup_files (
   uploaded_at TEXT NOT NULL
 );
 
--- A/B testinde "Koleksiyona hangisi girsin?" cevabı; image_id = 0 "Hiçbiri".
+-- A/B testinde "Koleksiyonda hangisinin olmasını istersiniz?" cevabı; image_id = 0 "Hiçbiri".
 CREATE TABLE IF NOT EXISTS picks (
   invitation_id INTEGER NOT NULL REFERENCES invitations(id) ON DELETE CASCADE,
   model_id      INTEGER NOT NULL REFERENCES models(id),

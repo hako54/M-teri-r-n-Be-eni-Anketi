@@ -270,7 +270,7 @@ test('A/B testi: seçenekler ayrı puanlanır, koleksiyon tercihi kazananı beli
 
   const x = await join(token, 'x@f.com');
   r = await anon('GET', `/a/${x}`);
-  assert.match(r.text, /Koleksiyona hangisi girsin/);
+  assert.match(r.text, /Koleksiyonda hangisinin olmasını istersiniz\?/);
   assert.match(r.text, /B · Yeşil-bej/);
   assert.match(r.text, /C · Seçenek C/);
 
