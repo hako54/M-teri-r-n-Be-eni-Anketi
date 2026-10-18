@@ -433,9 +433,11 @@ app.post('/anketler', auth.requireUser, async (req, res) => {
 const ownSurvey = (req) => db.prepare('SELECT * FROM surveys WHERE id = ? AND user_id = ?').get(Number(req.params.id) || 0, req.user.id);
 const invitedEmails = (surveyId) => db.prepare('SELECT email FROM invitations WHERE survey_id = ? AND invited = 1 ORDER BY id').all(surveyId).map((r) => r.email);
 
-app.get('/anketler/:id', auth.requireUser, (req, res) => {
+app.get('/anketler/:id', auth.requireUser, async (req, res) => {
   const survey = ownSurvey(req);
   if (!survey) return res.redirect('/anketler');
+  // İngilizce taslakta eksik kalan metinler sayfa açılırken otomatik çevrilir.
+  if (survey.lang === 'en' && ceviri.missingFor(survey).length) await ceviri.translateSurvey(survey);
   const flashes = {
     taslak: 'Anket taslak olarak kaydedildi. Hazır olduğunuzda “Gönder” ile canlıya alın.',
     yayinda: 'Anket canlıda. Outlook açıldıysa maili kontrol edip gönderin. Kapanışta sonucu göndermeyi unutmamak için hatırlatıcıyı takviminize ekleyin.',
@@ -453,7 +455,7 @@ app.get('/anketler/:id', auth.requireUser, (req, res) => {
     results,
     invitations: db.prepare('SELECT * FROM invitations WHERE survey_id = ? ORDER BY completed_at IS NULL, invited DESC, email').all(survey.id),
     translations: survey.lang === 'en' ? ceviri.surveyTexts(survey) : null,
-    deeplEnabled: ceviri.enabled(),
+    engineName: ceviri.engineName(),
     resultHtml: survey.closed_at || (survey.published_at && new Date(survey.closes_at) <= new Date()) ? resultEmail(results) : null,
     flash: flashes[req.query.m],
     autoOpenOutlook: req.query.m === 'yayinda',

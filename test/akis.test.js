@@ -9,8 +9,9 @@ process.env.ADMIN_EMAILS = 'Ayse@Firma.com.tr; diger.admin@firma.com.tr';
 process.env.COMPANY_DOMAIN = 'firma.com.tr';
 process.env.DEEPL_API_KEY = 'test-anahtar:fx';
 
-// DeepL taklidi: gerçek servise gidilmez. deeplDown true iken hata döner.
+// DeepL ve Google taklidi: gerçek servise gidilmez. deeplDown / googleDown true iken hata döner.
 let deeplDown = false;
+let googleDown = false;
 const deeplCalls = [];
 const realFetch = global.fetch;
 global.fetch = async (url, opts) => {
@@ -19,6 +20,11 @@ global.fetch = async (url, opts) => {
     deeplCalls.push(body);
     if (deeplDown) return new Response('servis yok', { status: 503 });
     return Response.json({ translations: body.text.map((t) => ({ text: `EN ${t}` })) });
+  }
+  if (String(url).startsWith('https://translate.googleapis.com/')) {
+    if (googleDown) return new Response('sorry', { status: 429 });
+    const q = new URL(url).searchParams.get('q');
+    return Response.json([[[`GEN ${q}`, q]], null, 'tr']);
   }
   return realFetch(url, opts);
 };
@@ -585,8 +591,8 @@ test('İngilizce anket: dil seçimi, otomatik çeviri, düzeltme, İngilizce kat
   assert.match(r.text, /İçerik;Tuşe \/ Özellik;/);
   assert.match(r.text, /Kaşe kumaş;%80 Yün %20 Polyamid;yumuşak tuşe;/);
 
-  // DeepL çalışmazsa yeni metinli anket taslakta bekler
-  deeplDown = true;
+  // DeepL ve Google çalışmazsa yeni metinli anket taslakta bekler
+  deeplDown = true; googleDown = true;
   const fd2 = new FormData();
   fd2.append('ana_kumas', 'Çevrilmemiş kumaş'); fd2.append('icerik', '%100 Keten');
   fd2.append('images', new Blob([PNG], { type: 'image/png' }), 'c.png');
@@ -599,9 +605,14 @@ test('İngilizce anket: dil seçimi, otomatik çeviri, düzeltme, İngilizce kat
   assert.strictEqual(db.prepare('SELECT published_at FROM surveys WHERE id = ?').get(id2).published_at, null);
   r = await admin('GET', r.location);
   assert.match(r.text, /metnin İngilizcesi eksik/);
+  googleDown = false;
+  r = await admin('GET', `/anketler/${id2}`);
+  assert.match(r.text, /value="GEN Çevrilmemiş kumaş"/, 'DeepL hata verirse sayfa açılışında Google ile çevrilir');
+  assert.strictEqual(db.prepare("SELECT engine FROM translations WHERE source = '%100 Keten'").get().engine, 'google');
   deeplDown = false;
   r = await admin('POST', `/anketler/${id2}/yayinla`);
-  assert.match(r.location, /m=yayinda/, 'DeepL dönünce eksikler çevrilip yayınlanır');
+  assert.match(r.location, /m=yayinda/);
+  assert.strictEqual(db.prepare("SELECT en FROM translations WHERE source = '%100 Keten'").get().en, 'EN %100 Keten', 'DeepL dönünce Google çevirisi yenilenir');
 });
 
 test('alıcı listesi isteğe bağlı: boş bırakılınca Outlook alıcısız açılır, link ile katılınır', async () => {

@@ -409,12 +409,12 @@ function resultsList(models) {
 }
 
 // İngilizce ankette katılımcının göreceği metinler: Türkçesi, İngilizcesi (düzeltilebilir).
-function translationsCard(survey, translations, deeplEnabled) {
+function translationsCard(survey, translations, engineName) {
   const missing = translations.filter((t) => !t.en).length;
   return html`<form class="card stack" id="ceviriler" method="post" action="/anketler/${survey.id}/ceviri">
     <div class="label">İngilizce metinler <span class="lang-pill">EN</span></div>
-    <p class="sub">${deeplEnabled ? 'Metinler DeepL ile otomatik çevrildi. Kontrol edip gerekirse düzeltin; düzeltmeniz sonraki anketlerde de kullanılır.' : html`Otomatik çeviri için DeepL anahtarı henüz ayarlı değil. İngilizce metinleri aşağıya yazın.`}</p>
-    ${missing ? html`<div class="info">${missing} metnin İngilizcesi eksik. Eksik çeviri varken anket gönderilmez.</div>` : ''}
+    <p class="sub">Metinler ${engineName} ile otomatik çevrilir. Kontrol edip gerekirse düzeltin; düzeltmeniz sonraki anketlerde de kullanılır.</p>
+    ${missing ? html`<div class="info">${missing} metnin İngilizcesi eksik (otomatik çeviri şu an yapılamadı). “Eksikleri otomatik çevir” ile tekrar deneyin ya da aşağıya yazın. Eksik çeviri varken anket gönderilmez.</div>` : ''}
     <div class="tr-list">${translations.map((t) => html`<div class="tr-row">
       <div class="tr-src"><small>${t.label}</small><span>${t.source}</span></div>
       <input type="hidden" name="src" value="${t.source}">
@@ -422,12 +422,12 @@ function translationsCard(survey, translations, deeplEnabled) {
     </div>`)}</div>
     <div class="actions">
       <button class="btn btn-sm">İngilizce metinleri kaydet</button>
-      ${deeplEnabled && missing ? html`<button class="btn btn-sm btn-soft" formaction="/anketler/${survey.id}/ceviri/otomatik" formnovalidate>Eksikleri otomatik çevir</button>` : ''}
+      ${missing ? html`<button class="btn btn-sm btn-soft" formaction="/anketler/${survey.id}/ceviri/otomatik" formnovalidate>Eksikleri otomatik çevir</button>` : ''}
     </div>
   </form>`;
 }
 
-function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, resultHtml, flash, translations, deeplEnabled, autoOpenOutlook, links, invite, invitedEmails, resultMailto }) {
+function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, resultHtml, flash, translations, engineName, autoOpenOutlook, links, invite, invitedEmails, resultMailto }) {
   const { survey, invited, completed, models } = results;
   const state = surveyState(survey);
   const rate = invited ? Math.min(100, Math.round((completed / invited) * 100)) : 0;
@@ -477,7 +477,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     <div class="head"><div><h1>${survey.title}${survey.lang === 'en' ? html` <span class="lang-pill">EN</span>` : ''}</h1><p class="sub">${subline}</p></div>
       ${state === 'taslak' ? html`<span class="pill wait">Taslak</span>` : ''}</div>
     ${flash ? html`<div class="ok">${flash}</div>` : ''}
-    ${translations && state === 'taslak' ? translationsCard(survey, translations, deeplEnabled) : ''}
+    ${translations && state === 'taslak' ? translationsCard(survey, translations, engineName) : ''}
     ${state === 'taslak' ? draftPanel : ''}
     ${state === 'acik' ? livePanel : ''}
     ${state === 'kapali' ? html`<div class="card stack result-mail ${survey.result_opened_at ? '' : 'pending'}">
@@ -522,7 +522,7 @@ function surveyDetailPage({ user, isAdmin, testMailto, results, invitations, res
     </tbody></table></div>` : html`
     <h2>Ankette ${models.length} model var</h2>
     <div class="pick">${models.map((m) => html`<div class="pick-item">${thumb(m.image)}<span class="no">${m.code}</span>${m.ab ? html`<span class="ab">A/B</span>` : ''}<small>${m.ana_kumas}</small></div>`)}</div>`}
-    ${translations && state !== 'taslak' ? translationsCard(survey, translations, deeplEnabled) : ''}
+    ${translations && state !== 'taslak' ? translationsCard(survey, translations, engineName) : ''}
     <div class="danger-zone">${deleteSurveyForm({ ...survey, completed }, false)}</div>
     <script src="${asset('/static/kopyala.js')}"></script>
     ${autoOpenOutlook && invite ? raw(`<script>setTimeout(function(){var a=document.getElementById('outlook');if(!a)return;if(window.openMail)window.openMail(a.getAttribute('href'));else window.location.href=a.href;},400);</script>`) : ''}`,
