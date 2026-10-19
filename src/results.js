@@ -1,4 +1,4 @@
-const { db, modelCode, modelImages, isAbTest } = require('./db');
+const { db, modelCode, modelImages, isAbTest, imageInfo, infoLine } = require('./db');
 const kirilim = require('./kirilim');
 
 function firstImage(modelId) {
@@ -70,7 +70,9 @@ function computeResults(surveyId) {
         const own = ownAnswer.get(c.invitation_id, m.id, 0) || {};
         return { email: c.email, text: c.text, note: own.not_my_style ? 'Tarzım değil' : own.score ? `${own.score} puan` : '' };
       });
-      return { ...base, ...summarize(responsesFor.all(surveyId, m.id, 0)), comments, variants: [] };
+      // A/B değilse görseller tek model sayılır; görsele özel bilgiler ayrıca listelenir.
+      const imageInfos = images.map((im) => ({ letter: im.letter, ...variantInfo(m, im) })).filter((x) => x.info);
+      return { ...base, ...summarize(responsesFor.all(surveyId, m.id, 0)), comments, variants: [], imageInfos };
     }
 
     const picks = picksFor.all(surveyId, m.id);
@@ -79,6 +81,7 @@ function computeResults(surveyId) {
       imageId: im.id,
       letter: im.letter,
       label: im.label || '',
+      ...variantInfo(m, im),
       filename: im.filename,
       picks: pickCount(im.id),
       ...summarize(responsesFor.all(surveyId, m.id, im.id)),
@@ -108,6 +111,12 @@ function computeResults(surveyId) {
   return { survey, invited, completed, models: [...rows].sort(byAvg) };
 }
 
+// Seçeneğin kendi kumaş bilgisi; yalnızca modelden farklı yazıldıysa info dolu gelir.
+function variantInfo(m, im) {
+  const i = imageInfo(m, im);
+  return { ana_kumas: i.ana_kumas, icerik: i.icerik, ozellik: i.ozellik, info: i.custom ? infoLine(i) : '' };
+}
+
 function formatAvg(avg) {
   return avg === null ? '–' : avg.toFixed(1).replace('.', ',');
 }
@@ -133,7 +142,7 @@ function resultsCsv(results) {
       return;
     }
     for (const v of m.variants) {
-      body.push([...head, m.test_konusu, v.letter, v.label, formatAvg(v.avg), v.scored, v.notMyStyle, ...v.dist,
+      body.push([i + 1, m.code, v.ana_kumas, v.icerik, v.ozellik, ...head.slice(5), m.test_konusu, v.letter, v.label, formatAvg(v.avg), v.scored, v.notMyStyle, ...v.dist,
         v.picks, m.winner && m.winner.imageId === v.imageId ? 'Evet' : '']);
     }
     body.push([...head, m.test_konusu, '–', 'Hiçbiri', '', '', '', '', '', '', '', '', m.noPick, '']);

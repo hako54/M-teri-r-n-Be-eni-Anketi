@@ -340,3 +340,8 @@ select:disabled { opacity: .55; }
 .step-info .ozellik { font-size: .9rem; }
 .undo { display: flex; flex-direction: column; gap: 6px; }
 .preview .pv .x { position: absolute; right: 6px; top: 6px; }
+.img-info { margin-top: 6px; font-size: .82rem; }
+.img-info summary { color: var(--accent-ink); cursor: pointer; font-weight: 700; padding: 4px 0; }
+.img-info input { margin-top: 6px; font-size: .85rem !important; padding: 8px 10px !important; border-radius: 10px !important; }
+.img-note { font-size: .88rem; color: var(--muted); margin: 6px 0 2px; }
+.img-info small { display: block; color: var(--muted); font-size: .78rem; }

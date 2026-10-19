@@ -5,7 +5,7 @@
   var box = document.getElementById('preview');
   if (!input || !box) return;
   var existing = document.querySelectorAll('.img-cell').length;
-  var items = []; // { file, url, label }
+  var items = []; // { file, url, label, ana, icerik, ozellik }
   var canKeep = (function () { try { return Boolean(new DataTransfer().items); } catch (e) { return false; } })();
 
   function sync() {
@@ -34,7 +34,27 @@
       label.placeholder = 'Seçenek adı (isteğe bağlı)';
       label.value = it.label;
       label.addEventListener('input', function () { it.label = label.value; });
-      cell.append(img, letter, label);
+      // Görsele özel kumaş bilgisi; boş bırakılırsa modelinki geçerli olur.
+      var info = document.createElement('details');
+      info.className = 'img-info';
+      if (it.ana || it.icerik || it.ozellik) info.open = true;
+      var sum = document.createElement('summary');
+      sum.textContent = 'Kumaşı / içeriği farklı mı?';
+      info.appendChild(sum);
+      var hint = document.createElement('small');
+      hint.textContent = 'Boş bırakılan alan modelin bilgisini alır.';
+      info.appendChild(hint);
+      [['ana', 'img_ana', 120, 'Ana kumaş'], ['icerik', 'img_icerik', 200, 'İçerik'],
+        ['ozellik', 'img_ozellik', 200, 'Tuşe / özellik']].forEach(function (f) {
+        var el = document.createElement('input');
+        el.name = f[1];
+        el.maxLength = f[2];
+        el.placeholder = f[3];
+        el.value = it[f[0]];
+        el.addEventListener('input', function () { it[f[0]] = el.value; });
+        info.appendChild(el);
+      });
+      cell.append(img, letter, label, info);
       if (canKeep) {
         var x = document.createElement('button');
         x.type = 'button';
@@ -57,7 +77,7 @@
   input.addEventListener('change', function () {
     var picked = Array.prototype.slice.call(input.files);
     if (!canKeep) items.forEach(function (it) { URL.revokeObjectURL(it.url); });
-    items = (canKeep ? items : []).concat(picked.map(function (f) { return { file: f, url: URL.createObjectURL(f), label: '' }; }));
+    items = (canKeep ? items : []).concat(picked.map(function (f) { return { file: f, url: URL.createObjectURL(f), label: '', ana: '', icerik: '', ozellik: '' }; }));
     sync();
     render();
   });

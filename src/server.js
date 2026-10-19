@@ -4,7 +4,7 @@ const path = require('node:path');
 const express = require('express');
 const multer = require('multer');
 const config = require('./config');
-const { db, tx, modelCode, modelImages, isAbTest, TEST_KONULARI } = require('./db');
+const { db, tx, modelCode, modelImages, isAbTest, imageInfo, TEST_KONULARI } = require('./db');
 const auth = require('./auth');
 const views = require('./views');
 const { closesAt, formatTR } = require('./time');
@@ -278,7 +278,6 @@ app.get('/kirilim', auth.requireUser, (req, res) => {
 
 app.post('/modeller', auth.requireUser, upload.array('images'), (req, res) => {
   const values = { ana_kumas: field(req.body.ana_kumas, 120), icerik: field(req.body.icerik, 200), ozellik: field(req.body.ozellik, 200) || null, ...abFields(req.body), kirilim: kirilimField(req.body) };
-  const labels = [].concat(req.body.labels || []);
   const errs = [];
   if (!req.files || !req.files.length) errs.push('En az bir görsel ekleyin (JPG, PNG, WEBP, HEIC).');
   if (!values.ana_kumas) errs.push('Ana kumaşı yazın.');
@@ -293,13 +292,21 @@ app.post('/modeller', auth.requireUser, upload.array('images'), (req, res) => {
   const id = tx(() => {
     const { lastInsertRowid } = db.prepare('INSERT INTO models (user_id, ana_kumas, icerik, ozellik, ab_test, test_konusu, kirilim) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(req.user.id, values.ana_kumas, values.icerik, values.ozellik, values.ab_test, values.test_konusu, values.kirilim);
-    const addImg = db.prepare('INSERT INTO model_images (model_id, filename, label, sort_order) VALUES (?, ?, ?, ?)');
-    req.files.forEach((f, i) => addImg.run(lastInsertRowid, f.filename, field(labels[i], 80) || null, i));
+    addImages(lastInsertRowid, req.files, req.body, 0);
     return lastInsertRowid;
   });
   // "Kaydet ve ankete ilerle": model seçili olarak anket oluşturmaya geçer.
   res.redirect(req.body.next === 'anket' ? `/anketler/yeni?model=${id}` : `/modeller/${id}?m=eklendi`);
 });
+
+// Yeni görseller: seçenek adı ve (modelden farklıysa) görsele özel ana kumaş, içerik, tuşe aynı sırayla gelir.
+function addImages(modelId, files, body, start) {
+  const list = (name) => [].concat(body[name] || []);
+  const [labels, anas, iceriks, ozelliks] = ['labels', 'img_ana', 'img_icerik', 'img_ozellik'].map(list);
+  const addImg = db.prepare('INSERT INTO model_images (model_id, filename, label, ana_kumas, icerik, ozellik, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  files.forEach((f, i) => addImg.run(modelId, f.filename, field(labels[i], 80) || null,
+    field(anas[i], 120) || null, field(iceriks[i], 200) || null, field(ozelliks[i], 200) || null, start + i));
+}
 
 const getModel = (id) => db.prepare('SELECT * FROM models WHERE id = ?').get(Number(id) || 0);
 
@@ -330,17 +337,17 @@ app.post('/modeller/:id', auth.requireUser, upload.array('images'), (req, res) =
     removeFiles(req.files);
     return send(res, views.modelFormPage({ user: req.user, model: { ...model, ...ab }, images, errs }), 400);
   }
-  const labels = [].concat(req.body.labels || []);
   tx(() => {
     db.prepare('UPDATE models SET ana_kumas = ?, icerik = ?, ozellik = ?, ab_test = ?, test_konusu = ?, kirilim = ? WHERE id = ?')
       .run(ana, icerik, ozellik, ab.ab_test, ab.test_konusu, kir, model.id);
-    const setLabel = db.prepare('UPDATE model_images SET label = ? WHERE id = ?');
+    const setImg = db.prepare('UPDATE model_images SET label = ?, ana_kumas = ?, icerik = ?, ozellik = ? WHERE id = ?');
     for (const im of images) {
-      if (`label_${im.id}` in req.body) setLabel.run(field(req.body[`label_${im.id}`], 80) || null, im.id);
+      if (!(`label_${im.id}` in req.body)) continue;
+      const f = (name, max) => field(req.body[`${name}_${im.id}`], max) || null;
+      setImg.run(f('label', 80), f('ana', 120), f('icerik', 200), f('ozellik', 200), im.id);
     }
     const start = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM model_images WHERE model_id = ?').get(model.id).n;
-    const addImg = db.prepare('INSERT INTO model_images (model_id, filename, label, sort_order) VALUES (?, ?, ?, ?)');
-    (req.files || []).forEach((f, i) => addImg.run(model.id, f.filename, field(labels[i], 80) || null, start + i));
+    addImages(model.id, req.files || [], req.body, start);
   });
   res.redirect(req.body.next === 'anket' ? `/anketler/yeni?model=${model.id}` : `/modeller/${model.id}?m=kaydedildi`);
 });
@@ -607,7 +614,10 @@ const isOpen = (survey) => Boolean(survey.published_at) && !survey.closed_at && 
 function participantModels(survey) {
   const tx = ceviri.tr2(survey.lang);
   return surveys.surveyModels(survey.id).map((m) => {
-    const images = modelImages(m.id).map((im) => ({ ...im, label: tx(im.label) }));
+    const images = modelImages(m.id).map((im) => {
+      const info = imageInfo(m, im);
+      return { ...im, label: tx(im.label), info: info.custom ? [info.ana_kumas, info.icerik, info.ozellik].filter(Boolean).map(tx).join(' · ') : '' };
+    });
     return {
       ...m, images, ab: isAbTest(m, images),
       ana_kumas: tx(m.ana_kumas), icerik: tx(m.icerik), ozellik: tx(m.ozellik), test_konusu: tx(m.test_konusu),

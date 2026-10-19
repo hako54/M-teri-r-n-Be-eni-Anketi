@@ -654,3 +654,45 @@ test('alıcı listesi isteğe bağlı: boş bırakılınca Outlook alıcısız a
   assert.strictEqual(results.invited, 0);
   assert.strictEqual(results.completed, 1);
 });
+
+test('görsele özel ana kumaş, içerik, tuşe: katılımcıda, sonuçta ve Excel’de seçeneğin kendi bilgisi', async () => {
+  const fd = new FormData();
+  fd.append('ana_kumas', 'Süprem'); fd.append('icerik', '%100 Pamuk');
+  fd.append('ab_test', '1'); fd.append('test_konusu', 'Model rengi');
+  for (const [label, ana, icerik, ozellik] of [['Beyaz', '', '', ''], ['Siyah', '', '%95 Pamuk %5 Elastan', 'esnek']]) {
+    fd.append('images', new Blob([PNG], { type: 'image/png' }), `${label}.png`);
+    fd.append('labels', label); fd.append('img_ana', ana); fd.append('img_icerik', icerik); fd.append('img_ozellik', ozellik);
+  }
+  let r = await admin('POST', '/modeller', fd);
+  const modelId = modelIdFrom(r);
+  const [a, b] = db.prepare('SELECT * FROM model_images WHERE model_id = ? ORDER BY sort_order').all(modelId);
+  assert.strictEqual(a.icerik, null, 'boş bırakılan alan modelinkini kullanır');
+  assert.strictEqual(b.icerik, '%95 Pamuk %5 Elastan');
+  assert.strictEqual(b.ozellik, 'esnek');
+
+  // Düzenleme sayfasında var olan görselin bilgisi değiştirilir
+  r = await admin('GET', `/modeller/${modelId}`);
+  assert.match(r.text, new RegExp(`name="icerik_${b.id}"[^>]*value="%95 Pamuk %5 Elastan"`));
+  const edit = new FormData();
+  edit.append('ana_kumas', 'Süprem'); edit.append('icerik', '%100 Pamuk'); edit.append('ab_test', '1'); edit.append('test_konusu', 'Model rengi');
+  edit.append(`label_${a.id}`, 'Beyaz'); edit.append(`ana_${a.id}`, 'Kaşkorse'); edit.append(`icerik_${a.id}`, ''); edit.append(`ozellik_${a.id}`, '');
+  edit.append(`label_${b.id}`, 'Siyah'); edit.append(`ana_${b.id}`, ''); edit.append(`icerik_${b.id}`, '%95 Pamuk %5 Elastan'); edit.append(`ozellik_${b.id}`, 'esnek');
+  r = await admin('POST', `/modeller/${modelId}`, edit);
+  assert.match(r.location, /m=kaydedildi/);
+  assert.strictEqual(db.prepare('SELECT ana_kumas FROM model_images WHERE id = ?').get(a.id).ana_kumas, 'Kaşkorse');
+
+  r = await admin('POST', '/anketler', surveyBody({ title: 'Görsel bilgisi', models: [modelId], emails: 'g@f.com', action: 'gonder' }));
+  const id = Number(r.location.match(/anketler\/(\d+)/)[1]);
+  const { public_token: token } = db.prepare('SELECT public_token FROM surveys WHERE id = ?').get(id);
+  const inv = await join(token, 'g@f.com');
+  r = await anon('GET', `/a/${inv}`);
+  assert.match(r.text, /B · Süprem · %95 Pamuk %5 Elastan · esnek/);
+  assert.match(r.text, /A · Kaşkorse · %100 Pamuk/);
+  await anon('POST', `/a/${inv}`, { [`r_${modelId}_${a.id}`]: '4', [`r_${modelId}_${b.id}`]: '5', [`p_${modelId}`]: String(b.id) });
+
+  r = await admin('GET', `/anketler/${id}/sonuclar.csv`);
+  assert.match(r.text, /Kaşkorse;%100 Pamuk;;[^\n]*;Model rengi;A;Beyaz;/);
+  assert.match(r.text, /Süprem;%95 Pamuk %5 Elastan;esnek;[^\n]*;Model rengi;B;Siyah;/);
+  r = await admin('GET', `/anketler/${id}`);
+  assert.match(r.text, /Süprem · %95 Pamuk %5 Elastan · esnek/);
+});

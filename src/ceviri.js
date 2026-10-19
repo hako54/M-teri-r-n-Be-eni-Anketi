@@ -2,7 +2,7 @@
 // geçici olarak Google Çeviri kullanılır. Her metin bir kez çevrilip saklanır; elle düzeltilen çeviri bir daha
 // üzerine yazılmaz. DeepL anahtarı sonradan eklenirse Google ile yapılmış çeviriler DeepL ile yenilenir.
 const config = require('./config');
-const { db, modelImages, isAbTest } = require('./db');
+const { db, modelImages } = require('./db');
 
 const deeplEnabled = () => Boolean(config.deeplKey);
 // Otomatik çeviri her zaman denenir: DeepL yoksa Google'a düşer.
@@ -132,9 +132,13 @@ function surveyTexts(survey) {
     texts.push({ source: m.ana_kumas, label: `${code} · ana kumaş` }, { source: m.icerik, label: `${code} · içerik` });
     if (m.ozellik) texts.push({ source: m.ozellik, label: `${code} · tuşe / özellik` });
     const images = modelImages(m.id);
-    if (isAbTest(m, images)) {
+    if (m.ab_test && images.length >= 2) {
       if (m.test_konusu) texts.push({ source: m.test_konusu, label: `${code} · A/B konusu` });
       for (const im of images) if (im.label) texts.push({ source: im.label, label: `${code} · seçenek ${im.letter}` });
+    }
+    for (const im of images) {
+      texts.push({ source: im.ana_kumas, label: `${code} · ${im.letter} ana kumaş` }, { source: im.icerik, label: `${code} · ${im.letter} içerik` },
+        { source: im.ozellik, label: `${code} · ${im.letter} tuşe / özellik` });
     }
   }
   const seen = new Set();

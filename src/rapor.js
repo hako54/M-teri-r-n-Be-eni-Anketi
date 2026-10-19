@@ -35,6 +35,7 @@ function abBlock(m) {
         <img src="${imgUrl(v.filename)}" alt="${v.letter}" width="90" style="width:100%;max-width:120px;border-radius:8px;display:block">
         <div style="font-size:13px;font-weight:800;margin-top:4px">${v.letter}${win ? ' ✓' : ''}</div>
         ${v.label ? html`<div style="font-size:11px;color:${C.muted}">${v.label}</div>` : ''}
+        ${v.info ? html`<div style="font-size:10px;color:${C.muted}">${v.info}</div>` : ''}
         <div style="font-size:12px;margin-top:3px"><b>${formatAvg(v.avg)}</b> ort. · <b>${v.picks}</b> tercih</div>
         <div style="font-size:11px;color:${C.muted}">${v.notMyStyle} tarzım değil</div>
       </div></td>`;

@@ -153,6 +153,8 @@ function addColumn(table, column, definition) {
 addColumn('models', 'kirilim', 'TEXT');
 addColumn('users', 'reset_requested_at', 'TEXT');
 addColumn('models', 'ozellik', 'TEXT');
+// Görsele özel kumaş bilgisi: boşsa modelinki geçerli (aynı kumaş, farklı içerik olabilir).
+for (const name of ['ana_kumas', 'icerik', 'ozellik']) addColumn('model_images', name, 'TEXT');
 addColumn('surveys', 'lang', "TEXT NOT NULL DEFAULT 'tr'");
 for (const col of ['result_opened_at TEXT', 'open_days INTEGER', 'open_hour TEXT', 'published_at TEXT', 'public_token TEXT', 'test_token TEXT', 'result_token TEXT']) {
   const [name, type] = col.split(' ');
@@ -208,4 +210,15 @@ function isAbTest(model, images) {
   return Boolean(model.ab_test) && images.length >= 2;
 }
 
-module.exports = { db, tx, modelCode, modelImages, isAbTest, TEST_KONULARI };
+// Görselin geçerli kumaş bilgisi; custom: en az bir alanı modelden farklı yazılmış.
+function imageInfo(model, im) {
+  const info = {
+    ana_kumas: im.ana_kumas || model.ana_kumas,
+    icerik: im.icerik || model.icerik,
+    ozellik: im.ozellik || model.ozellik || '',
+  };
+  return { ...info, custom: Boolean(im.ana_kumas || im.icerik || im.ozellik) };
+}
+const infoLine = (i) => [i.ana_kumas, i.icerik, i.ozellik].filter(Boolean).join(' · ');
+
+module.exports = { db, tx, modelCode, modelImages, isAbTest, imageInfo, infoLine, TEST_KONULARI };

@@ -73,7 +73,7 @@ function modelHead(m, i, y) {
 }
 
 const VAR_W = 146;
-const VAR_H = 236;
+const VAR_H = 252;
 const VAR_PER_ROW = 5;
 
 function variantTile(m, v, x, y) {
@@ -84,10 +84,11 @@ function variantTile(m, v, x, y) {
     ${text(x + 29, y + 31, v.letter, { size: 15, weight: 800, anchor: 'middle' })}
     ${win ? `<rect x="${x + VAR_W - 92}" y="${y + 14}" width="78" height="24" rx="12" fill="${C.accent}"/>${text(x + VAR_W - 53, y + 31, 'KAZANAN', { size: 12, weight: 800, fill: '#FFFFFF', anchor: 'middle' })}` : ''}
     ${text(x + 10, y + 148, trunc(v.label || `Seçenek ${v.letter}`, 17), { size: 14, weight: 700 })}
-    ${text(x + 10, y + 176, formatAvg(v.avg), { size: 22, weight: 800 })}
-    ${text(x + 58, y + 176, 'ort.', { size: 13, fill: C.muted })}
-    ${text(x + 10, y + 200, `${v.picks} tercih`, { size: 14, weight: 700, fill: C.accentInk })}
-    ${text(x + 10, y + 222, `${v.notMyStyle} tarzım değil`, { size: 12, fill: C.muted })}`;
+    ${v.info ? text(x + 10, y + 166, trunc(v.info, 24), { size: 11, fill: C.muted }) : ''}
+    ${text(x + 10, y + 192, formatAvg(v.avg), { size: 22, weight: 800 })}
+    ${text(x + 58, y + 192, 'ort.', { size: 13, fill: C.muted })}
+    ${text(x + 10, y + 216, `${v.picks} tercih`, { size: 14, weight: 700, fill: C.accentInk })}
+    ${text(x + 10, y + 238, `${v.notMyStyle} tarzım değil`, { size: 12, fill: C.muted })}`;
 }
 
 function modelHeight(m) {

@@ -232,6 +232,16 @@ function kirilimFields(value) {
   <script src="${asset('/static/kirilim.js')}"></script>`;
 }
 
+// Görsele özel ana kumaş, içerik, tuşe; boş bırakılan alan için modelin bilgisi geçerli olur.
+function imageFields(letter, names, values = {}) {
+  const custom = values.ana_kumas || values.icerik || values.ozellik;
+  return html`<details class="img-info" ${custom ? 'open' : ''}><summary>${custom ? 'Bu görselin bilgisi' : 'Kumaşı / içeriği farklı mı?'}</summary>
+    <small>Boş bırakılan alan modelin bilgisini alır.</small>
+    <input name="${names.ana}" maxlength="120" placeholder="Ana kumaş" value="${values.ana_kumas || ''}" aria-label="${letter} ana kumaş">
+    <input name="${names.icerik}" maxlength="200" placeholder="İçerik" value="${values.icerik || ''}" aria-label="${letter} içerik">
+    <input name="${names.ozellik}" maxlength="200" placeholder="Tuşe / özellik" value="${values.ozellik || ''}" aria-label="${letter} tuşe"></details>`;
+}
+
 function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, added, saved, canDelete, surveyCount }) {
   const isNew = !model;
   const v = model || values;
@@ -253,7 +263,8 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, 
     ${!isNew && images.length ? html`<div class="card"><div class="label">Görseller</div><div class="img-grid">
       ${images.map((im) => html`<div class="img-cell">${thumb(im.filename)}<span class="no">${im.letter}</span>
         <button class="x" formaction="/modeller/${model.id}/gorsel/${im.id}/sil" formnovalidate title="Görseli kaldır" aria-label="${im.letter} görselini kaldır">×</button>
-        <input class="vlabel" name="label_${im.id}" maxlength="80" placeholder="Seçenek adı, ör. Lacivert-beyaz" value="${im.label || ''}" aria-label="${im.letter} seçeneğinin adı"></div>`)}
+        <input class="vlabel" name="label_${im.id}" maxlength="80" placeholder="Seçenek adı, ör. Lacivert-beyaz" value="${im.label || ''}" aria-label="${im.letter} seçeneğinin adı">
+        ${imageFields(im.letter, { ana: `ana_${im.id}`, icerik: `icerik_${im.id}`, ozellik: `ozellik_${im.id}` }, im)}</div>`)}
     </div></div>` : ''}
     <div class="card stack">
       <label class="drop" for="images">
@@ -394,12 +405,12 @@ function resultsList(models) {
           ${m.ab ? html`<div class="sub"><span class="ab inline">A/B</span> ${m.test_konusu || 'Seçenek karşılaştırması'} · ${m.winner ? html`önde: <b>${m.winner.letter}${m.winner.label ? ` · ${m.winner.label}` : ''}</b>` : 'henüz oy yok'}</div>
           <div class="variants">${m.variants.map((v) => html`<div class="variant ${m.winner && m.winner.imageId === v.imageId ? 'win' : ''}">
             <div class="tile-img">${thumb(v.filename)}<span class="no">${v.letter}</span></div>
-            <div class="v-body"><b>${v.label || `Seçenek ${v.letter}`}</b>
+            <div class="v-body"><b>${v.label || `Seçenek ${v.letter}`}</b>${v.info ? html`<div class="sub small">${v.info}</div>` : ''}
               <div class="v-num"><span><em>${formatAvg(v.avg)}</em> ort.</span><span><em>${v.picks}</em> tercih</span></div>
               <div class="sub">${v.scored} puan · ${v.notMyStyle} tarzım değil</div>
               <div class="dist">${v.dist.map((n, k) => html`<span><b>${k + 1}</b>${n}</span>`)}</div></div></div>`)}</div>
           ${m.noPick ? html`<div class="sub">${m.noPick} kişi hiçbirini seçmedi</div>` : ''}`
-    : html`<div class="sub">${m.scored} kişi puan verdi · ${m.notMyStyle} tarzım değil</div>
+    : html`${(m.imageInfos || []).map((x) => html`<div class="sub small">Görsel ${x.letter}: ${x.info}</div>`)}<div class="sub">${m.scored} kişi puan verdi · ${m.notMyStyle} tarzım değil</div>
           <div class="dist">${m.dist.map((n, k) => html`<span><b>${k + 1}</b>${n}</span>`)}</div>`}
           ${m.comments.length ? html`<details><summary>${m.comments.length} yorum</summary>${m.comments.map((c) => html`<p class="comment">“${c.text}” <span class="sub">· ${c.email}${c.note ? ` · ${c.note}` : ''}</span></p>`)}</details>` : ''}
         </div>
@@ -557,6 +568,7 @@ function abStep(m, L) {
       ${L.abIntro(m.images.length)}</div>
     ${m.images.map((im) => html`<div class="variant-rate">
       <div class="tile-img"><img class="ph wide" src="/uploads/${im.filename}" alt="${m.code} ${im.letter}"><span class="no big">${im.letter}</span></div>
+      ${im.info ? html`<div class="img-note">${im.letter} · ${im.info}</div>` : ''}
       ${rating(`r_${m.id}_${im.id}`, `${im.letter} · ${name(im)}`, L)}
     </div>`)}
     <fieldset class="rate pickset"><legend>${L.abQuestion}</legend>
@@ -584,6 +596,7 @@ function participantPage({ survey, title, models, email, test = false }) {
         ${m.ab ? abStep(m, L) : html`
         <div class="step-imgs">${m.images.length ? m.images.map((im) => html`<img src="/uploads/${im.filename}" alt="${m.code}">`) : html`<div class="ph ph-empty">${L.noImage}</div>`}</div>
         ${modelInfo(m)}
+        ${m.images.filter((im) => im.info).map((im) => html`<div class="img-note">${m.images.length > 1 ? `${L.photo(im.letter)} · ` : ''}${im.info}</div>`)}
         ${rating(`r_${m.id}`, L.howMuch, L)}`}
         <label class="field"><span>${L.comment} <em>${L.optional}</em></span><textarea name="c_${m.id}" rows="2" maxlength="1000" placeholder="${L.commentHint}"></textarea></label>
         <div class="step-nav">
