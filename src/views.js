@@ -258,7 +258,7 @@ function modelFormPage({ user, model, images = [], nextCode, values = {}, errs, 
     <div class="card stack">
       <label class="drop" for="images">
         <input id="images" name="images" type="file" accept="image/*" multiple ${isNew ? 'required' : ''}>
-        <b>${isNew ? 'Görsel ekle' : 'Görsel ekle (isteğe bağlı)'}</b><span>Birden fazla seçebilir, telefonda fotoğraf çekebilirsiniz.</span>
+        <b>${isNew ? 'Görsel ekle' : 'Görsel ekle (isteğe bağlı)'}</b><span>Birden fazla seçebilir, telefonda fotoğraf çekebilirsiniz. Her eklediğiniz görsel listeye eklenir; yanlış olanı × ile kaldırın.</span>
       </label>
       <div class="preview" id="preview"></div>
       <fieldset class="abbox">
